@@ -1,7 +1,62 @@
-import { EmbedBuilder, ColorResolvable, ChannelType } from "discord.js";
+import { EmbedBuilder, AttachmentBuilder, ColorResolvable, ChannelType } from "discord.js";
+import type { Message } from "discord.js";
 import { discord, getTextChannel } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
 import type { ToolModule, ToolResult } from "./types.js";
+
+export const attachmentsSchema = {
+  type: "array" as const,
+  description: "Files to attach (max 10, 25MB each). Provide exactly one of url, file_path, or data for each.",
+  items: {
+    type: "object" as const,
+    properties: {
+      url: { type: "string" as const, description: "Public URL of the file to upload." },
+      file_path: { type: "string" as const, description: "Absolute path to a local file." },
+      data: { type: "string" as const, description: "Base64-encoded file content." },
+      filename: { type: "string" as const, description: "Filename (required with data, optional otherwise)." },
+      description: { type: "string" as const, description: "Alt text for the attachment." },
+      spoiler: { type: "boolean" as const, description: "Mark as spoiler." },
+    },
+  },
+};
+
+interface AttachmentInput {
+  url?: string;
+  file_path?: string;
+  data?: string;
+  filename?: string;
+  description?: string;
+  spoiler?: boolean;
+}
+
+export function buildAttachments(inputs: AttachmentInput[]): AttachmentBuilder[] {
+  if (inputs.length > 10) throw new Error("Discord allows a maximum of 10 attachments per message.");
+  return inputs.map((a) => {
+    const source = a.data
+      ? Buffer.from(a.data, "base64")
+      : (a.file_path ?? a.url!);
+    const builder = new AttachmentBuilder(source);
+    const name = a.filename
+      ?? (a.file_path ? a.file_path.split("/").pop()! : undefined)
+      ?? (a.url ? a.url.split("/").pop()?.split("?")[0] : undefined)
+      ?? "file";
+    builder.setName(name);
+    if (a.description) builder.setDescription(a.description);
+    if (a.spoiler) builder.setSpoiler(true);
+    return builder;
+  });
+}
+
+export function formatAttachments(msg: Message) {
+  return [...msg.attachments.values()].map((a) => ({
+    id: a.id,
+    filename: a.name,
+    url: a.url,
+    size: a.size,
+    content_type: a.contentType,
+    description: a.description,
+  }));
+}
 
 /** Tool definitions for reading, sending, replying, editing, reacting, threading, embedding, deleting, pinning, and searching messages. */
 export const definitions = [
@@ -19,27 +74,29 @@ export const definitions = [
   },
   {
     name: "discord_send_message",
-    description: "Send a plain text message to a channel.",
+    description: "Send a message with text and/or file attachments to a channel.",
     inputSchema: {
       type: "object",
       properties: {
         channel_id: { type: "string" },
-        content: { type: "string" },
+        content: { type: "string", description: "Text content. Optional if attachments are provided." },
+        attachments: attachmentsSchema,
       },
-      required: ["channel_id", "content"],
+      required: ["channel_id"],
     },
   },
   {
     name: "discord_reply_message",
-    description: "Reply to a specific message in a channel.",
+    description: "Reply to a specific message with text and/or file attachments.",
     inputSchema: {
       type: "object",
       properties: {
         channel_id: { type: "string" },
         message_id: { type: "string", description: "The message ID to reply to." },
-        content: { type: "string" },
+        content: { type: "string", description: "Text content. Optional if attachments are provided." },
+        attachments: attachmentsSchema,
       },
-      required: ["channel_id", "message_id", "content"],
+      required: ["channel_id", "message_id"],
     },
   },
   {
@@ -96,7 +153,7 @@ export const definitions = [
   },
   {
     name: "discord_send_embed",
-    description: "Send a rich embed message with title, description, color, fields, footer, image, thumbnail, author, URL, and timestamp.",
+    description: "Send a rich embed message with title, description, color, fields, footer, image, thumbnail, author, URL, timestamp, and optional file attachments.",
     inputSchema: {
       type: "object",
       properties: {
@@ -129,8 +186,9 @@ export const definitions = [
         },
         thumbnail_url: { type: "string", description: "Small image shown in the top-right corner." },
         footer: { type: "string" },
-        image_url: { type: "string" },
+        image_url: { type: "string", description: "URL or attachment://filename to use an attached file." },
         timestamp: { type: "boolean", description: "If true, adds the current timestamp to the embed." },
+        attachments: attachmentsSchema,
       },
       required: ["channel_id"],
     },
@@ -178,7 +236,7 @@ export const definitions = [
   },
   {
     name: "discord_send_multiple_embeds",
-    description: "Send up to 10 embeds in a single message.",
+    description: "Send up to 10 embeds in a single message, with optional file attachments.",
     inputSchema: {
       type: "object",
       properties: {
@@ -222,6 +280,7 @@ export const definitions = [
             },
           },
         },
+        attachments: attachmentsSchema,
       },
       required: ["channel_id", "embeds"],
     },
@@ -367,21 +426,27 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
         .map((m) => ({
           id: m.id, author: m.author.tag, content: m.content,
-          timestamp: m.createdAt.toISOString(), attachments: m.attachments.size, pinned: m.pinned,
+          timestamp: m.createdAt.toISOString(), attachments: formatAttachments(m), pinned: m.pinned,
         }));
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
 
     case "discord_send_message": {
       const channel = await getTextChannel(args.channel_id as string);
-      const sent = await channel.send(args.content as string);
+      const files = args.attachments ? buildAttachments(args.attachments as AttachmentInput[]) : undefined;
+      const content = (args.content as string | undefined) || undefined;
+      if (!content && !files?.length) throw new Error("At least one of content or attachments is required.");
+      const sent = await channel.send({ content, files });
       return { content: [{ type: "text", text: `✅ Message sent (id: ${sent.id}) in #${channel.name}.` }] };
     }
 
     case "discord_reply_message": {
       const channel = await getTextChannel(args.channel_id as string);
       const target = await channel.messages.fetch(args.message_id as string);
-      const sent = await target.reply(args.content as string);
+      const files = args.attachments ? buildAttachments(args.attachments as AttachmentInput[]) : undefined;
+      const content = (args.content as string | undefined) || undefined;
+      if (!content && !files?.length) throw new Error("At least one of content or attachments is required.");
+      const sent = await target.reply({ content, files });
       return { content: [{ type: "text", text: `✅ Reply sent (id: ${sent.id}) to message ${args.message_id} in #${channel.name}.` }] };
     }
 
@@ -430,7 +495,8 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
     case "discord_send_embed": {
       const channel = await getTextChannel(args.channel_id as string);
       const embed = buildEmbed(args);
-      const sent = await channel.send({ embeds: [embed] });
+      const files = args.attachments ? buildAttachments(args.attachments as AttachmentInput[]) : undefined;
+      const sent = await channel.send({ embeds: [embed], files });
       return { content: [{ type: "text", text: `✅ Embed sent (id: ${sent.id}) in #${channel.name}.` }] };
     }
 
@@ -448,9 +514,11 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
       const embedArgs = args.embeds as Record<string, unknown>[];
       if (embedArgs.length > 10) throw new Error("Discord allows a maximum of 10 embeds per message.");
       const embeds = embedArgs.map((e) => buildEmbed(e));
+      const files = args.attachments ? buildAttachments(args.attachments as AttachmentInput[]) : undefined;
       const sent = await channel.send({
         content: (args.content as string) || undefined,
         embeds,
+        files,
       });
       return { content: [{ type: "text", text: `✅ ${embeds.length} embeds sent (id: ${sent.id}) in #${channel.name}.` }] };
     }
@@ -477,7 +545,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
       const matches = [...messages.values()]
         .filter((m) => m.content.toLowerCase().includes(keyword))
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
-        .map((m) => ({ id: m.id, author: m.author.tag, content: m.content, timestamp: m.createdAt.toISOString() }));
+        .map((m) => ({ id: m.id, author: m.author.tag, content: m.content, timestamp: m.createdAt.toISOString(), attachments: formatAttachments(m) }));
       return { content: [{ type: "text", text: matches.length > 0 ? JSON.stringify(matches, null, 2) : `No messages found containing "${args.keyword}" in the last ${limit} messages.` }] };
     }
 
@@ -520,7 +588,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
       const channel = await getTextChannel(args.channel_id as string);
       const pinned = await channel.messages.fetchPinned();
       const result = [...pinned.values()].map((m) => ({
-        id: m.id, author: m.author.tag, content: m.content, timestamp: m.createdAt.toISOString(),
+        id: m.id, author: m.author.tag, content: m.content, timestamp: m.createdAt.toISOString(), attachments: formatAttachments(m),
       }));
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }

@@ -1,5 +1,6 @@
 import { ChannelType, ForumChannel, ThreadChannel } from "discord.js";
 import { discord, validateId } from "../client.js";
+import { attachmentsSchema, buildAttachments, formatAttachments } from "./messages.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
 /** Tool definitions for managing forum channels, posts, tags, and threads. */
@@ -31,7 +32,7 @@ export const definitions = [
   },
   {
     name: "discord_create_forum_post",
-    description: "Create a new post (thread) in a forum channel.",
+    description: "Create a new post (thread) in a forum channel with optional file attachments.",
     inputSchema: {
       type: "object",
       properties: {
@@ -43,6 +44,7 @@ export const definitions = [
           items: { type: "string" },
           description: "Array of tag IDs to apply to the post.",
         },
+        attachments: attachmentsSchema,
       },
       required: ["forum_channel_id", "title", "content"],
     },
@@ -72,14 +74,15 @@ export const definitions = [
   },
   {
     name: "discord_reply_to_forum",
-    description: "Reply to a forum post (send a message in a forum thread).",
+    description: "Reply to a forum post (send a message in a forum thread) with optional file attachments.",
     inputSchema: {
       type: "object",
       properties: {
         thread_id: { type: "string" },
-        content: { type: "string" },
+        content: { type: "string", description: "Text content. Optional if attachments are provided." },
+        attachments: attachmentsSchema,
       },
-      required: ["thread_id", "content"],
+      required: ["thread_id"],
     },
   },
   {
@@ -202,9 +205,10 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_create_forum_post": {
       const forum = await getForumChannel(args.forum_channel_id as string);
+      const files = args.attachments ? buildAttachments(args.attachments as Parameters<typeof buildAttachments>[0]) : undefined;
       const thread = await forum.threads.create({
         name: args.title as string,
-        message: { content: args.content as string },
+        message: { content: args.content as string, files },
         appliedTags: (args.applied_tags as string[] | undefined) ?? [],
       });
       return { content: [{ type: "text", text: `✅ Forum post "${thread.name}" created (id: ${thread.id}) in #${forum.name}.` }] };
@@ -229,6 +233,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
             author: m.author.tag,
             content: m.content,
             timestamp: m.createdAt.toISOString(),
+            attachments: formatAttachments(m),
           })),
       };
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
@@ -255,7 +260,10 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_reply_to_forum": {
       const thread = await getThreadChannel(args.thread_id as string);
-      const sent = await thread.send(args.content as string);
+      const files = args.attachments ? buildAttachments(args.attachments as Parameters<typeof buildAttachments>[0]) : undefined;
+      const content = (args.content as string | undefined) || undefined;
+      if (!content && !files?.length) throw new Error("At least one of content or attachments is required.");
+      const sent = await thread.send({ content, files });
       return { content: [{ type: "text", text: `✅ Reply sent (id: ${sent.id}) in thread "${thread.name}".` }] };
     }
 

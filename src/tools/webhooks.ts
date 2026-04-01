@@ -1,5 +1,6 @@
 import { WebhookClient, EmbedBuilder, ColorResolvable } from "discord.js";
 import { discord, validateId } from "../client.js";
+import { attachmentsSchema, buildAttachments } from "./messages.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
 /** Tool definitions for creating, sending via, editing, deleting, and listing webhooks. */
@@ -19,7 +20,7 @@ export const definitions = [
   },
   {
     name: "discord_send_webhook_message",
-    description: "Send a message via a webhook using its ID and token.",
+    description: "Send a message via a webhook using its ID and token, with optional file attachments.",
     inputSchema: {
       type: "object",
       properties: {
@@ -57,6 +58,7 @@ export const definitions = [
             },
           },
         },
+        attachments: attachmentsSchema,
       },
       required: ["webhook_id", "webhook_token"],
     },
@@ -206,8 +208,11 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
           if (embedArgs.length > 10) throw new Error("Discord allows a maximum of 10 embeds per message.");
           sendOptions.embeds = embedArgs.map((e) => buildWebhookEmbed(e));
         }
-        if (!sendOptions.content && !sendOptions.embeds) {
-          throw new Error("At least one of content or embeds is required.");
+        if (args.attachments) {
+          sendOptions.files = buildAttachments(args.attachments as Parameters<typeof buildAttachments>[0]);
+        }
+        if (!sendOptions.content && !sendOptions.embeds && !sendOptions.files) {
+          throw new Error("At least one of content, embeds, or attachments is required.");
         }
         const sent = await client.send(sendOptions);
         return { content: [{ type: "text", text: `✅ Webhook message sent (id: ${sent.id}).` }] };
@@ -303,9 +308,18 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
       const client = new WebhookClient({ id: webhookId, token });
       try {
         const msg = await client.fetchMessage(args.message_id as string);
+        const attachments = (msg.attachments ?? []).map((a) => ({
+          id: a.id,
+          filename: a.filename,
+          url: a.url,
+          size: a.size,
+          content_type: a.content_type ?? null,
+          description: a.description ?? null,
+        }));
         return { content: [{ type: "text", text: JSON.stringify({
           id: msg.id, content: msg.content, embeds: msg.embeds.length,
           timestamp: msg.timestamp,
+          attachments,
         }, null, 2) }] };
       } finally {
         client.destroy();
