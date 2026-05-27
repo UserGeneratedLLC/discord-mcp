@@ -3,6 +3,7 @@ import {
   Client,
   GatewayIntentBits,
   TextChannel,
+  ThreadChannel,
   GuildChannel,
   PermissionsBitField,
 } from "discord.js";
@@ -62,15 +63,18 @@ export async function ensureConnected(): Promise<void> {
 }
 
 /**
- * Fetches a channel by ID and guarantees it is a text channel.
+ * Fetches a channel by ID and guarantees it is a text-capable guild channel
+ * (a TextChannel or any thread inside one — announcement / public / private / forum).
+ * Both class hierarchies expose the message-send / edit / fetch surface used by
+ * the message tools, so the wrapper accepts either.
  * @param channelId - Discord snowflake ID of the channel.
- * @returns The resolved TextChannel instance.
- * @throws {Error} If the channel does not exist or is not a text channel.
+ * @returns The resolved TextChannel or ThreadChannel instance.
+ * @throws {Error} If the channel does not exist or is neither a text channel nor a thread.
  */
-export async function getTextChannel(channelId: string): Promise<TextChannel> {
+export async function getTextChannel(channelId: string): Promise<TextChannel | ThreadChannel> {
   const channel = await discord.channels.fetch(channelId);
-  if (!channel || !(channel instanceof TextChannel))
-    throw new Error(`Channel ${channelId} is not a text channel or doesn't exist.`);
+  if (!channel || (!(channel instanceof TextChannel) && !(channel instanceof ThreadChannel)))
+    throw new Error(`Channel ${channelId} is not a text or thread channel or doesn't exist.`);
   return channel;
 }
 
