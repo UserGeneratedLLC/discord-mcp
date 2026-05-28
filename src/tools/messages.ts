@@ -1,4 +1,11 @@
-import { EmbedBuilder, ColorResolvable, ChannelType } from "discord.js";
+import {
+  EmbedBuilder,
+  ColorResolvable,
+  ChannelType,
+  TextChannel,
+  PublicThreadChannel,
+  PrivateThreadChannel,
+} from "discord.js";
 import { discord, getTextChannel } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
 import type { ToolModule, ToolResult } from "./types.js";
@@ -411,6 +418,9 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
         });
         return { content: [{ type: "text", text: `✅ Thread "${thread.name}" created from message (id: ${thread.id}).` }] };
       } else {
+        if (!(channel instanceof TextChannel)) {
+          throw new Error(`Standalone thread creation requires a parent TextChannel; ${args.channel_id} is itself a thread. Pass a message_id to start a thread from a message instead.`);
+        }
         const thread = await channel.threads.create({
           name: args.name as string,
           autoArchiveDuration: duration as 60 | 1440 | 4320 | 10080,
@@ -529,7 +539,9 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
       const channel = await getTextChannel(args.channel_id as string);
       const msg = await channel.messages.fetch(args.message_id as string);
       const targetChannel = await getTextChannel(args.target_channel_id as string);
-      await msg.forward(targetChannel);
+      // ThreadChannel<boolean> is the abstract base for PublicThreadChannel / PrivateThreadChannel;
+      // any runtime instance is one of them, but the type narrowing can't be expressed without a cast.
+      await msg.forward(targetChannel as TextChannel | PublicThreadChannel<boolean> | PrivateThreadChannel);
       return { content: [{ type: "text", text: `✅ Message ${msg.id} forwarded to #${targetChannel.name}.` }] };
     }
 
