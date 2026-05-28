@@ -6,10 +6,12 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_get_server_stats",
-    description: "Get server statistics: member count (humans vs bots), channels, roles, boost level.",
+    description:
+      "Get a snapshot of server metrics: total members (humans vs cached bots), channel breakdown (text/voice/category), role count, boost tier and count, and creation date. Read-only. Returns a JSON object. Note: the bot count reflects only members currently in cache.",
+    annotations: { title: "Get server stats", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
-      properties: { guild_id: { type: "string" } },
+      properties: { guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." } },
       required: ["guild_id"],
     },
   },

@@ -6,122 +6,140 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_list_roles",
-    description: "List all roles in a guild with permissions and member count.",
+    description:
+      "List all roles in a server (excluding @everyone), highest-first, with color, position, member count, and permissions. Read-only. Returns a JSON array. Use discord_get_role_members to see who holds a given role.",
+    annotations: { title: "List roles", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
-      properties: { guild_id: { type: "string" } },
+      properties: { guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." } },
       required: ["guild_id"],
     },
   },
   {
     name: "discord_create_role",
-    description: "Create a new role in a guild.",
+    description:
+      "Create a new role in a server. Requires the Manage Roles permission; the new role is placed below the bot's highest role. Use discord_add_role to then assign it to members. Returns the new role's name and ID.",
+    annotations: { title: "Create role", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        name: { type: "string" },
-        color: { type: "string", description: "Hex color e.g. #FF5733" },
-        hoist: { type: "boolean" },
-        mentionable: { type: "boolean" },
-        permissions: { type: "array", items: { type: "string" }, description: "e.g. ['SendMessages','ViewChannel']" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        name: { type: "string", description: "Name of the new role (max 100 characters)." },
+        color: { type: "string", description: "Role color as a hex string, e.g. '#FF5733'." },
+        hoist: { type: "boolean", description: "If true, display members with this role separately in the member list." },
+        mentionable: { type: "boolean", description: "If true, anyone can @mention this role." },
+        permissions: { type: "array", items: { type: "string" }, description: "Server-wide permission flag names to grant, e.g. ['SendMessages','ViewChannel']. Uses Discord PermissionsBitField flag names." },
       },
       required: ["guild_id", "name"],
     },
   },
   {
     name: "discord_edit_role",
-    description: "Edit an existing role (name, color, permissions, hoist, mentionable).",
+    description:
+      "Update an existing role's name, color, permissions, hoist, or mentionable flag. Only provided fields change; passing permissions REPLACES the role's full permission set. Requires the Manage Roles permission, and the role must be below the bot's highest role.",
+    annotations: { title: "Edit role", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        role_id: { type: "string" },
-        name: { type: "string" },
-        color: { type: "string" },
-        hoist: { type: "boolean" },
-        mentionable: { type: "boolean" },
-        permissions: { type: "array", items: { type: "string" } },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        role_id: { type: "string", description: "ID (snowflake) of the role to edit." },
+        name: { type: "string", description: "New role name (max 100 characters)." },
+        color: { type: "string", description: "New role color as a hex string, e.g. '#FF5733'." },
+        hoist: { type: "boolean", description: "If true, display members with this role separately in the member list." },
+        mentionable: { type: "boolean", description: "If true, anyone can @mention this role." },
+        permissions: { type: "array", items: { type: "string" }, description: "Permission flag names. Providing this REPLACES the role's entire permission set. Uses Discord PermissionsBitField flag names." },
       },
       required: ["guild_id", "role_id"],
     },
   },
   {
     name: "discord_delete_role",
-    description: "Delete a role from a guild.",
+    description:
+      "Permanently delete a role from the server; it is automatically removed from every member who held it. IRREVERSIBLE. Requires the Manage Roles permission, and the role must be below the bot's highest role.",
+    annotations: { title: "Delete role", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        role_id: { type: "string" },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        role_id: { type: "string", description: "ID (snowflake) of the role to delete." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "role_id"],
     },
   },
   {
     name: "discord_add_role",
-    description: "Assign a role to a member.",
+    description:
+      "Assign an existing role to a member. Requires the Manage Roles permission, and the role must be below the bot's highest role. Idempotent: assigning a role the member already has has no effect. Use discord_remove_role to undo.",
+    annotations: { title: "Add role to member", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_id: { type: "string" },
-        role_id: { type: "string" },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_id: { type: "string", description: "Discord user ID (snowflake) of the member to give the role to." },
+        role_id: { type: "string", description: "ID (snowflake) of the role to assign." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "user_id", "role_id"],
     },
   },
   {
     name: "discord_remove_role",
-    description: "Remove a role from a member.",
+    description:
+      "Remove a role from a member. Requires the Manage Roles permission, and the role must be below the bot's highest role. Idempotent: removing a role the member doesn't have has no effect. Reverses discord_add_role.",
+    annotations: { title: "Remove role from member", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_id: { type: "string" },
-        role_id: { type: "string" },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_id: { type: "string", description: "Discord user ID (snowflake) of the member to remove the role from." },
+        role_id: { type: "string", description: "ID (snowflake) of the role to remove." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "user_id", "role_id"],
     },
   },
   {
     name: "discord_get_role_members",
-    description: "List all members that have a specific role.",
+    description:
+      "List every member who currently holds a specific role. Returns a JSON array (id, username, nickname). Read-only. Use discord_list_roles to discover role IDs first.",
+    annotations: { title: "Get role members", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        role_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        role_id: { type: "string", description: "ID (snowflake) of the role to list holders of." },
       },
       required: ["guild_id", "role_id"],
     },
   },
   {
     name: "discord_set_role_position",
-    description: "Change a role's position in the hierarchy.",
+    description:
+      "Move a role up or down in the server's role hierarchy, which determines permission precedence and member-list ordering. Higher position = higher in the list. Requires the Manage Roles permission, and the target position must be below the bot's highest role.",
+    annotations: { title: "Set role position", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        role_id: { type: "string" },
-        position: { type: "number" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        role_id: { type: "string", description: "ID (snowflake) of the role to reposition." },
+        position: { type: "number", description: "New hierarchy position (0 = lowest, just above @everyone). Higher numbers rank higher." },
       },
       required: ["guild_id", "role_id", "position"],
     },
   },
   {
     name: "discord_set_role_icon",
-    description: "Set a custom icon or unicode emoji on a role (requires server boost level 2+).",
+    description:
+      "Set or clear a role's icon — either a custom image or a unicode emoji. Requires the server to be Boost Level 2+ (the ROLE_ICONS feature) and the Manage Roles permission. Pass null to either field to remove that icon. Returns a confirmation.",
+    annotations: { title: "Set role icon", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        role_id: { type: "string" },
-        icon: { type: "string", description: "Image URL for the role icon. Set to null to remove." },
-        unicode_emoji: { type: "string", description: "Unicode emoji for the role. Set to null to remove." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        role_id: { type: "string", description: "ID (snowflake) of the role to set the icon on." },
+        icon: { type: "string", description: "Image URL for the role icon, or null to remove it." },
+        unicode_emoji: { type: "string", description: "Unicode emoji to use as the role icon, or null to remove it." },
       },
       required: ["guild_id", "role_id"],
     },

@@ -6,74 +6,86 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_get_channel_permissions",
-    description: "List all permission overwrites on a channel (per role and per member).",
+    description:
+      "List every permission overwrite on a channel, per role and per member, with the allowed and denied permission flags for each. Read-only. Use discord_audit_permissions for a server-wide report across all channels.",
+    annotations: { title: "Get channel permissions", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
-      properties: { channel_id: { type: "string" } },
+      properties: { channel_id: { type: "string", description: "ID (snowflake) of the channel to inspect." } },
       required: ["channel_id"],
     },
   },
   {
     name: "discord_set_role_permission",
-    description: "Allow or deny specific permissions for a role on a channel.",
+    description:
+      "Add or update a per-channel permission overwrite for a role, allowing and/or denying specific permissions. Merges with the role's existing overwrite (does not reset it). Requires the Manage Roles permission. Use discord_set_member_permission to target a single member instead.",
+    annotations: { title: "Set role channel permission", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
-        role_id: { type: "string" },
-        allow: { type: "array", items: { type: "string" }, description: "e.g. ['SendMessages','ViewChannel']" },
-        deny: { type: "array", items: { type: "string" } },
-        reason: { type: "string" },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel to set the overwrite on." },
+        role_id: { type: "string", description: "ID (snowflake) of the role to grant/deny permissions for." },
+        allow: { type: "array", items: { type: "string" }, description: "Permission flag names to allow, e.g. ['SendMessages','ViewChannel']. Uses Discord PermissionsBitField flag names." },
+        deny: { type: "array", items: { type: "string" }, description: "Permission flag names to deny, e.g. ['SendMessages']." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["channel_id", "role_id"],
     },
   },
   {
     name: "discord_set_member_permission",
-    description: "Allow or deny specific permissions for a single member on a channel.",
+    description:
+      "Add or update a per-channel permission overwrite for a single member, allowing and/or denying specific permissions. Merges with the member's existing overwrite. Requires the Manage Roles permission. Use discord_set_role_permission to target a whole role instead.",
+    annotations: { title: "Set member channel permission", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
-        user_id: { type: "string" },
-        allow: { type: "array", items: { type: "string" } },
-        deny: { type: "array", items: { type: "string" } },
-        reason: { type: "string" },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel to set the overwrite on." },
+        user_id: { type: "string", description: "ID (snowflake) of the member to grant/deny permissions for." },
+        allow: { type: "array", items: { type: "string" }, description: "Permission flag names to allow, e.g. ['ViewChannel']. Uses Discord PermissionsBitField flag names." },
+        deny: { type: "array", items: { type: "string" }, description: "Permission flag names to deny." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["channel_id", "user_id"],
     },
   },
   {
     name: "discord_reset_channel_permissions",
-    description: "Remove ALL permission overwrites on a channel (reset to inherited).",
+    description:
+      "Remove ALL permission overwrites on a channel, resetting it to inherit from its category/server defaults. IRREVERSIBLE — the cleared overwrites cannot be recovered. Requires the Manage Roles permission.",
+    annotations: { title: "Reset channel permissions", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
-        reason: { type: "string" },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel whose overwrites will be cleared." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["channel_id"],
     },
   },
   {
     name: "discord_copy_permissions",
-    description: "Copy all permission overwrites from one channel to another.",
+    description:
+      "Replace the target channel's permission overwrites with a copy of the source channel's. The target's existing overwrites are overwritten. Requires the Manage Roles permission. Returns a confirmation.",
+    annotations: { title: "Copy channel permissions", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        source_channel_id: { type: "string" },
-        target_channel_id: { type: "string" },
-        reason: { type: "string" },
+        source_channel_id: { type: "string", description: "ID (snowflake) of the channel to copy overwrites from." },
+        target_channel_id: { type: "string", description: "ID (snowflake) of the channel whose overwrites will be replaced." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["source_channel_id", "target_channel_id"],
     },
   },
   {
     name: "discord_audit_permissions",
-    description: "Generate a full permission audit report for a guild: who can access what on every channel.",
+    description:
+      "Generate a server-wide permission report: for every channel that has overwrites, lists each role/member and their allowed/denied permissions (entity names resolved). Read-only. Returns a JSON array. Use discord_get_channel_permissions for a single channel.",
+    annotations: { title: "Audit permissions", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
-      properties: { guild_id: { type: "string" } },
+      properties: { guild_id: { type: "string", description: "Discord server (guild) ID (snowflake) to audit." } },
       required: ["guild_id"],
     },
   },

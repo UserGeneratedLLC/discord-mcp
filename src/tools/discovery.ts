@@ -6,35 +6,43 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_list_guilds",
-    description: "List all Discord servers the bot is connected to.",
+    description:
+      "List every Discord server (guild) the bot is a member of (id, name, member count, icon). Takes no arguments. Read-only. Start here to discover the guild_id needed by most other tools.",
+    annotations: { title: "List servers", readOnlyHint: true, openWorldHint: true },
     inputSchema: { type: "object", properties: {} },
   },
   {
     name: "discord_get_guild_info",
-    description: "Get detailed info about a guild: name, member count, channels, roles, boosts.",
+    description:
+      "Get details about one server: name, description, member/channel/role counts, boost tier, owner, and creation date. Read-only. Use discord_get_server_stats for a finer breakdown (humans vs bots, channel types).",
+    annotations: { title: "Get server info", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
-      properties: { guild_id: { type: "string" } },
+      properties: { guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." } },
       required: ["guild_id"],
     },
   },
   {
     name: "discord_list_channels",
-    description: "List all channels in a guild grouped by category.",
+    description:
+      "List all channels in a server, grouped by their parent category and ordered by position. Returns a JSON object keyed by category name. Read-only. Use discord_find_channel_by_name to locate a specific channel.",
+    annotations: { title: "List channels", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
-      properties: { guild_id: { type: "string" } },
+      properties: { guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." } },
       required: ["guild_id"],
     },
   },
   {
     name: "discord_find_channel_by_name",
-    description: "Find a channel by name in a guild (partial match supported).",
+    description:
+      "Find channels whose name contains a substring (case-insensitive). Returns matching channels (id, name, type) as a JSON array. Read-only. Useful for resolving a channel_id when you only know the channel's name.",
+    annotations: { title: "Find channel by name", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        name: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        name: { type: "string", description: "Case-insensitive substring to match against channel names." },
       },
       required: ["guild_id", "name"],
     },

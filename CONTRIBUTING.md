@@ -20,11 +20,13 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_my_tool",
-    description: "What this tool does.",
+    description:
+      "One clear action sentence. Then: when to use it vs. similar tools, required Discord permissions, any side effects or destructive/irreversible behavior, and what it returns.",
+    annotations: { title: "My tool", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
       },
       required: ["guild_id"],
     },
@@ -56,6 +58,21 @@ export default { definitions, handle } satisfies ToolModule;
 - Success messages start with `✅`
 - Use `JSON.stringify(data, null, 2)` for list responses
 - Tool names are prefixed with `discord_`
+
+### Tool definition quality
+
+Every tool definition must carry its weight — directory scanners (e.g. Glama) score the
+*lowest*-quality tool heavily, so one thin definition drags the whole server's grade down.
+
+- **Description**: action statement + when to use it vs. similar tools + required Discord
+  permissions + side effects / destructive behavior + what it returns.
+- **`annotations`**: set the MCP hints — `readOnlyHint` (true for pure reads), `destructiveHint`
+  (true for delete/ban/prune/irreversible writes), `idempotentHint` (true if repeating the call
+  changes nothing further), and `openWorldHint: true` (every tool calls the Discord API). Add a
+  short `title`.
+- **Parameters**: give every `inputSchema` property a `description` with its format and constraints
+  (e.g. snowflake, value range, defaults). When the same schema block repeats across tools, extract
+  it into a shared `const` and spread it (see `EMBED_FIELD_PROPS` in `messages.ts`).
 
 ## Development
 

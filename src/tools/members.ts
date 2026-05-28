@@ -7,146 +7,168 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_list_members",
-    description: "List guild members with their roles.",
+    description:
+      "List members of a server with their roles, in join order. Returns a JSON array (id, username, nickname, roles, join date). Use discord_search_members to find specific members by name, or discord_get_member_info for one member's full details. Read-only.",
+    annotations: { title: "List members", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        limit: { type: "number", description: "1–1000, default 50." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        limit: { type: "number", description: "How many members to return (1–1000). Default 50." },
       },
       required: ["guild_id"],
     },
   },
   {
     name: "discord_get_member_info",
-    description: "Get detailed info about a member: roles, permissions, join date, timeout status.",
+    description:
+      "Get full details for one server member: roles, effective permissions, account/join dates, bot flag, and current timeout status. Read-only. Returns a JSON object.",
+    annotations: { title: "Get member info", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_id: { type: "string", description: "Discord user ID (snowflake) of the member." },
       },
       required: ["guild_id", "user_id"],
     },
   },
   {
     name: "discord_kick_member",
-    description: "Kick a member from a guild.",
+    description:
+      "Remove a member from the server. They can rejoin with a new invite (unlike a ban). Requires the Kick Members permission, and the bot's top role must be higher than the target's. Use discord_ban_member to block re-entry. The reason is recorded in the audit log.",
+    annotations: { title: "Kick member", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_id: { type: "string" },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_id: { type: "string", description: "Discord user ID (snowflake) of the member to kick." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "user_id"],
     },
   },
   {
     name: "discord_ban_member",
-    description: "Ban a member from a guild.",
+    description:
+      "Ban a user from the server, blocking re-entry until unbanned. Optionally bulk-deletes their recent messages. Requires the Ban Members permission, and the bot's top role must outrank the target's. Use discord_unban_member to reverse, or discord_kick_member for a non-permanent removal. The reason is recorded in the audit log.",
+    annotations: { title: "Ban member", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_id: { type: "string" },
-        reason: { type: "string" },
-        delete_message_days: { type: "number", description: "Delete messages from last N days (0–7)." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_id: { type: "string", description: "Discord user ID (snowflake) of the user to ban." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
+        delete_message_days: { type: "number", description: "Also delete the user's messages from the last N days (0–7). Default 0 (delete nothing)." },
       },
       required: ["guild_id", "user_id"],
     },
   },
   {
     name: "discord_unban_member",
-    description: "Unban a user from a guild.",
+    description:
+      "Lift a ban so the user may rejoin via a new invite. Requires the Ban Members permission. Reverses discord_ban_member. The reason is recorded in the audit log.",
+    annotations: { title: "Unban member", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_id: { type: "string" },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_id: { type: "string", description: "Discord user ID (snowflake) of the banned user to unban." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "user_id"],
     },
   },
   {
     name: "discord_timeout_member",
-    description: "Put a member in timeout (0 minutes to remove the timeout).",
+    description:
+      "Mute a member for a set duration (Discord 'timeout'): they cannot send messages, react, or speak until it expires. Pass duration_minutes = 0 to remove an active timeout early. Max 28 days (40320 minutes). Requires the Moderate Members permission.",
+    annotations: { title: "Timeout member", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_id: { type: "string" },
-        duration_minutes: { type: "number" },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_id: { type: "string", description: "Discord user ID (snowflake) of the member to time out." },
+        duration_minutes: { type: "number", description: "Timeout length in minutes (1–40320, i.e. up to 28 days). Use 0 to clear an existing timeout." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "user_id", "duration_minutes"],
     },
   },
   {
     name: "discord_search_members",
-    description: "Search guild members by username or nickname.",
+    description:
+      "Find server members whose username or nickname starts with a query string (prefix match). Returns a JSON array (id, username, nickname, roles). Use discord_list_members to page through everyone. Read-only.",
+    annotations: { title: "Search members", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        query: { type: "string", description: "Search query (matches username and nickname)." },
-        limit: { type: "number", description: "1–100, default 25." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        query: { type: "string", description: "Prefix to match against usernames and nicknames." },
+        limit: { type: "number", description: "Max members to return (1–100). Default 25." },
       },
       required: ["guild_id", "query"],
     },
   },
   {
     name: "discord_set_nickname",
-    description: "Set or clear a member's nickname.",
+    description:
+      "Set or clear a member's server nickname. Pass null (or the string 'null') to clear it. Requires the Manage Nicknames permission (or Change Nickname for the bot itself). The reason is recorded in the audit log.",
+    annotations: { title: "Set nickname", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_id: { type: "string" },
-        nickname: { type: "string", description: "New nickname, or null to clear." },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_id: { type: "string", description: "Discord user ID (snowflake) of the member." },
+        nickname: { type: "string", description: "New nickname (max 32 characters), or null to clear it." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "user_id", "nickname"],
     },
   },
   {
     name: "discord_list_bans",
-    description: "List all banned users in a guild.",
+    description:
+      "List the users currently banned from the server, with their ban reasons. Returns a JSON array (user_id, username, reason). Requires the Ban Members permission. Read-only.",
+    annotations: { title: "List bans", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        limit: { type: "number", description: "Max bans to fetch." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        limit: { type: "number", description: "Optional max number of bans to fetch. Omit to fetch all." },
       },
       required: ["guild_id"],
     },
   },
   {
     name: "discord_bulk_ban",
-    description: "Ban multiple users at once (raid mitigation).",
+    description:
+      "Ban many users in a single call, intended for raid mitigation. Requires the Ban Members permission. Returns counts of banned vs failed users. Use discord_ban_member for a single ban with finer control.",
+    annotations: { title: "Bulk ban", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        user_ids: { type: "array", items: { type: "string" }, description: "Array of user IDs to ban." },
-        delete_message_seconds: { type: "number", description: "Delete messages from last N seconds (0–604800)." },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        user_ids: { type: "array", items: { type: "string" }, description: "Array of user IDs (snowflakes) to ban." },
+        delete_message_seconds: { type: "number", description: "Also delete each user's messages from the last N seconds (0–604800, i.e. up to 7 days). Default 0." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "user_ids"],
     },
   },
   {
     name: "discord_prune_members",
-    description: "Remove inactive members. Use dry_run (default) to preview count first.",
+    description:
+      "Remove members who have been inactive (no roles, not seen) for a number of days. SAFE BY DEFAULT: dry_run is true unless explicitly set to false, so call it first to preview the count, then re-call with dry_run:false to actually remove them. Removal is irreversible (members must rejoin). Requires the Kick Members permission.",
+    annotations: { title: "Prune inactive members", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        days: { type: "number", description: "Number of days of inactivity (1–30)." },
-        roles: { type: "array", items: { type: "string" }, description: "Role IDs to include in the prune." },
-        dry_run: { type: "boolean", description: "If true (default), only returns count without pruning." },
-        reason: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        days: { type: "number", description: "Inactivity threshold in days (1–30)." },
+        roles: { type: "array", items: { type: "string" }, description: "Optional role IDs (snowflakes) to include; by default only members with no roles are counted." },
+        dry_run: { type: "boolean", description: "If true (default), only returns the count that would be pruned without removing anyone. Set false to actually prune." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "days"],
     },
