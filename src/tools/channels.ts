@@ -6,101 +6,117 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_create_channel",
-    description: "Create a text, voice channel or category in a guild.",
+    description:
+      "Create a text channel, voice channel, or category in a server. Requires the Manage Channels permission. For forum channels use discord_create_forum_channel instead. Returns the new channel's name and ID.",
+    annotations: { title: "Create channel", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        name: { type: "string" },
-        type: { type: "string", enum: ["text", "voice", "category"], description: "Defaults to 'text'." },
-        topic: { type: "string" },
-        category_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake) to create the channel in." },
+        name: { type: "string", description: "Name of the new channel (max 100 characters)." },
+        type: { type: "string", enum: ["text", "voice", "category"], description: "Channel type to create. Defaults to 'text'." },
+        topic: { type: "string", description: "Optional channel topic/description. Applies to text channels only." },
+        category_id: { type: "string", description: "Optional category (snowflake) to nest the new channel under." },
       },
       required: ["guild_id", "name"],
     },
   },
   {
     name: "discord_delete_channel",
-    description: "Delete a channel.",
+    description:
+      "Permanently delete a channel and all of its messages. IRREVERSIBLE. Requires the Manage Channels permission. An optional reason is recorded in the audit log. Returns a confirmation.",
+    annotations: { title: "Delete channel", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
-        reason: { type: "string" },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel to delete." },
+        reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["channel_id"],
     },
   },
   {
     name: "discord_edit_channel",
-    description: "Edit a channel's name, topic, slowmode, or NSFW flag.",
+    description:
+      "Update a channel's name, topic, slowmode, or NSFW flag. Only provided fields change; topic and slowmode apply to text channels only. Requires the Manage Channels permission. Returns a confirmation.",
+    annotations: { title: "Edit channel", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
-        name: { type: "string" },
-        topic: { type: "string" },
-        slowmode: { type: "number", description: "Slowmode in seconds (0 to disable)." },
-        nsfw: { type: "boolean", description: "Mark channel as NSFW." },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel to edit." },
+        name: { type: "string", description: "New channel name (max 100 characters)." },
+        topic: { type: "string", description: "New topic/description (text channels only)." },
+        slowmode: { type: "number", description: "Per-user message cooldown in seconds, 0–21600. 0 disables slowmode." },
+        nsfw: { type: "boolean", description: "Mark (true) or unmark (false) the channel as age-restricted (NSFW)." },
       },
       required: ["channel_id"],
     },
   },
   {
     name: "discord_move_channel",
-    description: "Move a channel into a category (or remove from category if category_id is omitted).",
+    description:
+      "Move a channel into a category, or remove it from its category when category_id is omitted. Requires the Manage Channels permission. Use discord_set_channel_position to reorder within a category. Returns a confirmation.",
+    annotations: { title: "Move channel", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
-        category_id: { type: "string" },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel to move." },
+        category_id: { type: "string", description: "Target category (snowflake). Omit to move the channel out of any category." },
       },
       required: ["channel_id"],
     },
   },
   {
     name: "discord_clone_channel",
-    description: "Clone a channel with its name, topic and permission overwrites.",
+    description:
+      "Create a copy of a channel, including its name, topic, and permission overwrites (but not its messages). Requires the Manage Channels permission. Returns the cloned channel's name and ID.",
+    annotations: { title: "Clone channel", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
-        new_name: { type: "string" },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel to clone." },
+        new_name: { type: "string", description: "Optional name for the clone. Defaults to the source channel's name." },
       },
       required: ["channel_id"],
     },
   },
   {
     name: "discord_set_channel_position",
-    description: "Set the display position of a channel within its category.",
+    description:
+      "Set a channel's display order within its category. Use discord_move_channel to change which category it belongs to. Requires the Manage Channels permission. Returns a confirmation.",
+    annotations: { title: "Set channel position", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
-        position: { type: "number" },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel to reposition." },
+        position: { type: "number", description: "Zero-based position within the category (0 = top)." },
       },
       required: ["channel_id", "position"],
     },
   },
   {
     name: "discord_follow_announcement_channel",
-    description: "Follow an announcement channel so its messages are published to a target channel.",
+    description:
+      "Subscribe a target channel to an announcement (news) channel, so the source's published messages are reposted into the target. The source must be an announcement channel. Requires the Manage Webhooks permission in the target. Returns a confirmation.",
+    annotations: { title: "Follow announcement channel", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        source_channel_id: { type: "string", description: "The announcement channel to follow." },
-        target_channel_id: { type: "string", description: "The channel that will receive published messages." },
+        source_channel_id: { type: "string", description: "ID (snowflake) of the announcement channel to follow." },
+        target_channel_id: { type: "string", description: "ID (snowflake) of the channel that will receive published messages." },
       },
       required: ["source_channel_id", "target_channel_id"],
     },
   },
   {
     name: "discord_lock_channel_permissions",
-    description: "Sync a channel's permissions with its parent category.",
+    description:
+      "Reset a channel's permission overwrites to exactly match its parent category (Discord's 'sync permissions'). The channel must be inside a category. Requires the Manage Roles permission. Returns a confirmation.",
+    annotations: { title: "Sync channel permissions", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        channel_id: { type: "string" },
+        channel_id: { type: "string", description: "ID (snowflake) of the channel to sync with its parent category." },
       },
       required: ["channel_id"],
     },

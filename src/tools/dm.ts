@@ -26,19 +26,19 @@ function buildEmbed(args: Record<string, unknown>): EmbedBuilder {
 
 /** Embed input schema properties (shared across embed tools). */
 const embedProperties = {
-  title: { type: "string" },
+  title: { type: "string", description: "Embed title shown in bold at the top." },
   url: { type: "string", description: "URL that makes the title clickable." },
-  description: { type: "string" },
-  color: { type: "string", description: "Hex color e.g. #5865F2" },
+  description: { type: "string", description: "Main body text of the embed (supports Markdown)." },
+  color: { type: "string", description: "Side-bar color as a hex string, e.g. '#5865F2'." },
   fields: {
     type: "array",
-    description: "Name/value blocks shown inside the embed (max 25). Set inline:true to render up to 3 side-by-side.",
+    description: "Up to 25 name/value field blocks. Set inline:true to render up to 3 side-by-side.",
     items: {
       type: "object",
       properties: {
-        name: { type: "string" },
-        value: { type: "string" },
-        inline: { type: "boolean" },
+        name: { type: "string", description: "Field heading." },
+        value: { type: "string", description: "Field body text." },
+        inline: { type: "boolean", description: "If true, render this field side-by-side with adjacent inline fields." },
       },
       required: ["name", "value"],
     },
@@ -47,24 +47,24 @@ const embedProperties = {
     type: "object",
     description: "Author block shown at the top of the embed.",
     properties: {
-      name: { type: "string" },
-      icon_url: { type: "string" },
-      url: { type: "string" },
+      name: { type: "string", description: "Author display name." },
+      icon_url: { type: "string", description: "Small icon shown next to the author name." },
+      url: { type: "string", description: "URL the author name links to." },
     },
     required: ["name"],
   },
   thumbnail_url: { type: "string", description: "Small image shown in the top-right corner." },
-  footer: { type: "string" },
-  image_url: { type: "string" },
-  timestamp: { type: "boolean", description: "If true, adds the current timestamp to the embed." },
+  footer: { type: "string", description: "Footer text shown at the bottom of the embed." },
+  image_url: { type: "string", description: "Large image shown below the embed body." },
+  timestamp: { type: "boolean", description: "If true, stamp the embed with the current time." },
 } as const;
 
 const userIdProp = {
-  user_id: { type: "string", description: "The Discord user ID." },
+  user_id: { type: "string", description: "Discord user ID (snowflake) of the DM recipient." },
 } as const;
 
 const messageIdProp = {
-  message_id: { type: "string", description: "The message ID (must be a bot message)." },
+  message_id: { type: "string", description: "ID of the target message within the DM conversation." },
 } as const;
 
 /** Tool definitions for direct messages. */
@@ -72,12 +72,13 @@ export const definitions = [
   {
     name: "discord_send_dm",
     description:
-      "Send a direct message to a user by their user ID. The bot must share at least one server with the user.",
+      "Send a private direct message to a user by their user ID. Use discord_send_message to post in a server channel instead. Requires the bot to share at least one server with the user, and the user must allow DMs from server members (otherwise Discord rejects the send). Returns the new message ID.",
+    annotations: { title: "Send DM", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         ...userIdProp,
-        content: { type: "string", description: "The message content to send." },
+        content: { type: "string", description: "Plain-text body of the DM (max 2000 characters)." },
       },
       required: ["user_id", "content"],
     },
@@ -85,12 +86,13 @@ export const definitions = [
   {
     name: "discord_send_dm_embed",
     description:
-      "Send a rich embed as a direct message to a user. The bot must share at least one server with the user, and the user must allow DMs from server members.",
+      "Send a rich embed as a private direct message to a user. Use discord_send_dm for plain text, or discord_send_embed to post an embed in a channel. Requires the bot to share a server with the user, and the user must allow DMs from server members. Returns the new message ID.",
+    annotations: { title: "Send DM embed", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         ...userIdProp,
-        content: { type: "string", description: "Optional text content above the embed." },
+        content: { type: "string", description: "Optional plain text shown above the embed." },
         ...embedProperties,
       },
       required: ["user_id"],
@@ -99,13 +101,14 @@ export const definitions = [
   {
     name: "discord_edit_dm",
     description:
-      "Edit a text message previously sent by the bot in a DM.",
+      "Edit the text content of a DM message previously sent by this bot. Only the bot's own DM messages can be edited. Use discord_edit_dm_embed for embed messages. Returns a confirmation.",
+    annotations: { title: "Edit DM", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         ...userIdProp,
         ...messageIdProp,
-        content: { type: "string", description: "New text content for the message." },
+        content: { type: "string", description: "New plain-text content that fully replaces the existing message (max 2000 characters)." },
       },
       required: ["user_id", "message_id", "content"],
     },
@@ -113,13 +116,14 @@ export const definitions = [
   {
     name: "discord_edit_dm_embed",
     description:
-      "Edit an embed previously sent by the bot in a DM. Only provided fields are updated; omitted fields are removed.",
+      "Replace the embed on a DM message previously sent by this bot. Only the bot's own messages can be edited. Full replace, not merge: provided fields are applied and omitted fields are dropped. Returns a confirmation.",
+    annotations: { title: "Edit DM embed", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         ...userIdProp,
         ...messageIdProp,
-        content: { type: "string", description: "Optional new text content above the embed." },
+        content: { type: "string", description: "Optional new plain text shown above the embed." },
         ...embedProperties,
       },
       required: ["user_id", "message_id"],
@@ -128,7 +132,8 @@ export const definitions = [
   {
     name: "discord_delete_dm",
     description:
-      "Delete a message previously sent by the bot in a DM. The bot can only delete its own messages.",
+      "Permanently delete a DM message previously sent by this bot. IRREVERSIBLE. The bot can only delete its own DM messages, not the recipient's. Returns a confirmation.",
+    annotations: { title: "Delete DM", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
@@ -141,12 +146,13 @@ export const definitions = [
   {
     name: "discord_read_dms",
     description:
-      "Read the last N messages from a DM conversation with a user.",
+      "Read the most recent messages from the bot's DM conversation with a user, oldest-to-newest. Returns a JSON array (id, author, content, embed count, timestamp). Read-only.",
+    annotations: { title: "Read DMs", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         ...userIdProp,
-        limit: { type: "number", description: "1–100, default 20." },
+        limit: { type: "number", description: "How many recent messages to fetch (1–100). Default 20." },
       },
       required: ["user_id"],
     },
@@ -154,13 +160,14 @@ export const definitions = [
   {
     name: "discord_reply_dm",
     description:
-      "Reply to a specific message in a DM, creating a quoted reply. Works on any message in the DM (bot or user).",
+      "Reply to a specific message in a DM, attaching a quoted reply reference. Unlike the edit/delete DM tools, this works on any message in the conversation (the bot's or the user's). Use discord_send_dm for a standalone DM with no reference. Returns the new reply's message ID.",
+    annotations: { title: "Reply to DM", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         ...userIdProp,
         ...messageIdProp,
-        content: { type: "string", description: "The reply content." },
+        content: { type: "string", description: "Plain-text body of the reply (max 2000 characters)." },
       },
       required: ["user_id", "message_id", "content"],
     },

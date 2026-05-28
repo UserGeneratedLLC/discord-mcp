@@ -5,30 +5,34 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_get_membership_screening",
-    description: "Get the current membership screening form (rules/questions new members must complete).",
+    description:
+      "Fetch the server's membership screening form — the rules/questions new members must accept before gaining access. Requires the server to have the Community feature enabled. Read-only. Returns the raw form as JSON (including its version, needed by the update tool).",
+    annotations: { title: "Get membership screening", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
-      properties: { guild_id: { type: "string" } },
+      properties: { guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." } },
       required: ["guild_id"],
     },
   },
   {
     name: "discord_update_membership_screening",
-    description: "Update the membership screening form: set a description and rules/questions that new members must agree to before joining.",
+    description:
+      "Update the server's membership screening form: set the welcome description and the rules new members must agree to. Only provided fields change. Requires the Community feature and the Manage Server permission. Returns the updated form.",
+    annotations: { title: "Update membership screening", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
         description: { type: "string", description: "Welcome message shown at the top of the screening form." },
         form_fields: {
           type: "array",
-          description: "List of rules/questions. Each item has: label (the rule title), values (array of rule lines), required (boolean).",
+          description: "Rules/agreement blocks new members must accept. Replaces the existing fields when provided.",
           items: {
             type: "object",
             properties: {
-              label: { type: "string", description: "Title/question for this field." },
-              values: { type: "array", items: { type: "string" }, description: "Array of rule lines or answer options." },
-              required: { type: "boolean", description: "Whether this field is required (default true)." },
+              label: { type: "string", description: "Title of this rules block." },
+              values: { type: "array", items: { type: "string" }, description: "Individual rule lines shown under the label." },
+              required: { type: "boolean", description: "Whether the member must agree to this block. Default true." },
             },
             required: ["label", "values"],
           },

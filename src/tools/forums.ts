@@ -6,42 +6,48 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_get_forum_channels",
-    description: "List all forum channels in a guild.",
+    description:
+      "List the forum channels in a server (id, name, topic, parent category). Read-only. Use discord_get_forum_tags to see a forum's available tags, or discord_list_forum_threads for its posts.",
+    annotations: { title: "List forum channels", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
       },
       required: ["guild_id"],
     },
   },
   {
     name: "discord_create_forum_channel",
-    description: "Create a new forum channel in a guild.",
+    description:
+      "Create a new forum channel in a server. A forum holds posts (threads) rather than a linear message feed. Requires the Manage Channels permission. Use discord_create_channel for text/voice channels instead. Returns the new channel's name and ID.",
+    annotations: { title: "Create forum channel", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        name: { type: "string" },
-        topic: { type: "string", description: "The forum channel guidelines/topic." },
-        category_id: { type: "string", description: "Parent category ID (optional)." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        name: { type: "string", description: "Name of the new forum channel (max 100 characters)." },
+        topic: { type: "string", description: "Guidelines/topic text shown at the top of the forum." },
+        category_id: { type: "string", description: "Optional category (snowflake) to nest the forum under." },
       },
       required: ["guild_id", "name"],
     },
   },
   {
     name: "discord_create_forum_post",
-    description: "Create a new post (thread) in a forum channel.",
+    description:
+      "Create a new post (a thread with a starter message) in a forum channel. Requires the Send Messages and Create Public Threads permissions. Use discord_reply_to_forum to add follow-up messages. Returns the new post's name and thread ID.",
+    annotations: { title: "Create forum post", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        forum_channel_id: { type: "string" },
-        title: { type: "string", description: "The post title (thread name)." },
-        content: { type: "string", description: "The initial message content of the post." },
+        forum_channel_id: { type: "string", description: "ID (snowflake) of the forum channel to post in." },
+        title: { type: "string", description: "Title of the post, used as the thread name (max 100 characters)." },
+        content: { type: "string", description: "Body of the post's starter message (max 2000 characters)." },
         applied_tags: {
           type: "array",
           items: { type: "string" },
-          description: "Array of tag IDs to apply to the post.",
+          description: "Optional tag IDs to apply. Get valid IDs from discord_get_forum_tags.",
         },
       },
       required: ["forum_channel_id", "title", "content"],
@@ -49,77 +55,89 @@ export const definitions = [
   },
   {
     name: "discord_get_forum_post",
-    description: "Get a forum post's details and its messages.",
+    description:
+      "Get a forum post's details (title, archived/locked state, applied tags, message count) plus its recent messages, oldest-to-newest. Read-only. Pass the post's thread_id. Returns a JSON object.",
+    annotations: { title: "Get forum post", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        thread_id: { type: "string" },
-        limit: { type: "number", description: "Number of messages to fetch (1–100, default 20)." },
+        thread_id: { type: "string", description: "ID (snowflake) of the forum post (thread)." },
+        limit: { type: "number", description: "How many recent messages to include (1–100). Default 20." },
       },
       required: ["thread_id"],
     },
   },
   {
     name: "discord_list_forum_threads",
-    description: "List all threads (active and archived) in a forum channel.",
+    description:
+      "List every post in a forum channel, both active and archived (id, name, state, tags, message count). Read-only. Use discord_get_forum_post to read one post's messages.",
+    annotations: { title: "List forum threads", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        forum_channel_id: { type: "string" },
+        forum_channel_id: { type: "string", description: "ID (snowflake) of the forum channel to list posts from." },
       },
       required: ["forum_channel_id"],
     },
   },
   {
     name: "discord_reply_to_forum",
-    description: "Reply to a forum post (send a message in a forum thread).",
+    description:
+      "Post a follow-up message inside an existing forum post (thread). Requires the Send Messages permission. Use discord_create_forum_post to start a new post instead. Returns the new message ID.",
+    annotations: { title: "Reply to forum post", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        thread_id: { type: "string" },
-        content: { type: "string" },
+        thread_id: { type: "string", description: "ID (snowflake) of the forum post (thread) to reply in." },
+        content: { type: "string", description: "Plain-text body of the reply (max 2000 characters)." },
       },
       required: ["thread_id", "content"],
     },
   },
   {
     name: "discord_delete_forum_post",
-    description: "Delete (close) a forum post/thread.",
+    description:
+      "Permanently delete a forum post (thread) and all its messages. IRREVERSIBLE. To merely close it without deleting, use discord_update_forum_post with archived:true. Requires the Manage Threads permission (or thread ownership).",
+    annotations: { title: "Delete forum post", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        thread_id: { type: "string" },
+        thread_id: { type: "string", description: "ID (snowflake) of the forum post (thread) to delete." },
       },
       required: ["thread_id"],
     },
   },
   {
     name: "discord_get_forum_tags",
-    description: "Get the available tags for a forum channel.",
+    description:
+      "List the tags available on a forum channel (id, name, emoji, moderated flag). Read-only. Use these IDs with discord_create_forum_post or discord_update_forum_post; manage the tag set with discord_set_forum_tags.",
+    annotations: { title: "Get forum tags", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        forum_channel_id: { type: "string" },
+        forum_channel_id: { type: "string", description: "ID (snowflake) of the forum channel to read tags from." },
       },
       required: ["forum_channel_id"],
     },
   },
   {
     name: "discord_set_forum_tags",
-    description: "Set or update the available tags on a forum channel.",
+    description:
+      "Replace the full set of available tags on a forum channel with the provided list. This overwrites existing tags, so include every tag you want to keep. Requires the Manage Channels permission. Returns a confirmation.",
+    annotations: { title: "Set forum tags", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        forum_channel_id: { type: "string" },
+        forum_channel_id: { type: "string", description: "ID (snowflake) of the forum channel to set tags on." },
         tags: {
           type: "array",
-          description: "Array of tag objects to set on the forum channel.",
+          description: "Complete list of tags to set (replaces all existing tags).",
           items: {
             type: "object",
             properties: {
-              name: { type: "string" },
-              emoji_name: { type: "string", description: "Unicode emoji for the tag (optional)." },
-              moderated: { type: "boolean", description: "If true, only moderators can apply this tag (optional)." },
+              name: { type: "string", description: "Tag label (max 20 characters)." },
+              emoji_name: { type: "string", description: "Optional unicode emoji shown on the tag." },
+              moderated: { type: "boolean", description: "If true, only members with Manage Threads can apply this tag. Default false." },
             },
             required: ["name"],
           },
@@ -130,18 +148,20 @@ export const definitions = [
   },
   {
     name: "discord_update_forum_post",
-    description: "Update a forum post's title, archived/locked status, or applied tags.",
+    description:
+      "Update a forum post's title, archived/locked state, or applied tags. Only provided fields change; passing applied_tags replaces the post's tags. Set archived:true to close a post without deleting it. Requires the Manage Threads permission (or thread ownership).",
+    annotations: { title: "Update forum post", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        thread_id: { type: "string" },
-        title: { type: "string", description: "New title for the forum post." },
-        archived: { type: "boolean", description: "Whether to archive the thread." },
-        locked: { type: "boolean", description: "Whether to lock the thread." },
+        thread_id: { type: "string", description: "ID (snowflake) of the forum post (thread) to update." },
+        title: { type: "string", description: "New title/thread name (max 100 characters)." },
+        archived: { type: "boolean", description: "true to archive (close) the post, false to reopen it." },
+        locked: { type: "boolean", description: "true to lock the post so only moderators can reply." },
         applied_tags: {
           type: "array",
           items: { type: "string" },
-          description: "Array of tag IDs to apply to the post.",
+          description: "Tag IDs to apply; replaces the post's current tags. Get valid IDs from discord_get_forum_tags.",
         },
       },
       required: ["thread_id"],

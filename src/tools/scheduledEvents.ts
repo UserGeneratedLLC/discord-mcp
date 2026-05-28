@@ -7,23 +7,27 @@ import type { ToolModule, ToolResult } from "./types.js";
 export const definitions = [
   {
     name: "discord_list_scheduled_events",
-    description: "List all scheduled events in a guild.",
+    description:
+      "List all scheduled events in a server (id, name, status, type, time, location, interested count). Read-only. Use discord_get_scheduled_event for one event's full details.",
+    annotations: { title: "List scheduled events", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
       },
       required: ["guild_id"],
     },
   },
   {
     name: "discord_get_scheduled_event",
-    description: "Get detailed info about a specific scheduled event.",
+    description:
+      "Get full details for one scheduled event: name, description, status, type, channel/location, start/end times, creator, and interested-user count. Read-only. Returns a JSON object.",
+    annotations: { title: "Get scheduled event", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        event_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        event_id: { type: "string", description: "ID (snowflake) of the scheduled event." },
       },
       required: ["guild_id", "event_id"],
     },
@@ -31,56 +35,61 @@ export const definitions = [
   {
     name: "discord_create_scheduled_event",
     description:
-      "Create a scheduled event in a guild. Use entity_type 'VOICE' or 'STAGE_INSTANCE' with a channel_id, or 'EXTERNAL' with a location and scheduled_end_time.",
+      "Create a scheduled event. For 'VOICE'/'STAGE_INSTANCE' events provide channel_id; for 'EXTERNAL' events provide location AND scheduled_end_time. Requires the Manage Events permission. Returns the new event's name and ID.",
+    annotations: { title: "Create scheduled event", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        name: { type: "string" },
-        description: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        name: { type: "string", description: "Event name (max 100 characters)." },
+        description: { type: "string", description: "Optional event description (max 1000 characters)." },
         entity_type: {
           type: "string",
-          description: "'VOICE', 'STAGE_INSTANCE', or 'EXTERNAL'.",
+          enum: ["VOICE", "STAGE_INSTANCE", "EXTERNAL"],
+          description: "Where the event happens: 'VOICE' or 'STAGE_INSTANCE' (needs channel_id), or 'EXTERNAL' (needs location + scheduled_end_time).",
         },
         scheduled_start_time: {
           type: "string",
-          description: "ISO 8601 datetime (e.g. '2025-06-01T20:00:00Z').",
+          description: "Event start as an ISO 8601 datetime, e.g. '2026-06-01T20:00:00Z'. Must be in the future.",
         },
         scheduled_end_time: {
           type: "string",
-          description: "ISO 8601 datetime. Required for EXTERNAL events.",
+          description: "Event end as an ISO 8601 datetime. Required for EXTERNAL events.",
         },
         channel_id: {
           type: "string",
-          description: "Voice or stage channel ID. Required for VOICE/STAGE_INSTANCE.",
+          description: "Voice or stage channel ID (snowflake). Required for VOICE/STAGE_INSTANCE events.",
         },
         location: {
           type: "string",
-          description: "Location string. Required for EXTERNAL events.",
+          description: "Free-text location (e.g. a URL or place). Required for EXTERNAL events.",
         },
-        image: { type: "string", description: "Cover image URL." },
+        image: { type: "string", description: "Optional cover image URL." },
       },
       required: ["guild_id", "name", "entity_type", "scheduled_start_time"],
     },
   },
   {
     name: "discord_edit_scheduled_event",
-    description: "Edit an existing scheduled event. Only provided fields are updated.",
+    description:
+      "Update a scheduled event; only provided fields change. Use the status field to start ('ACTIVE'), end ('COMPLETED'), or cancel ('CANCELED') an event — note Discord only allows certain status transitions. Requires the Manage Events permission.",
+    annotations: { title: "Edit scheduled event", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        event_id: { type: "string" },
-        name: { type: "string" },
-        description: { type: "string" },
-        scheduled_start_time: { type: "string", description: "ISO 8601 datetime." },
-        scheduled_end_time: { type: "string", description: "ISO 8601 datetime." },
-        channel_id: { type: "string" },
-        location: { type: "string" },
-        image: { type: "string", description: "Cover image URL." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        event_id: { type: "string", description: "ID (snowflake) of the event to edit." },
+        name: { type: "string", description: "New event name (max 100 characters)." },
+        description: { type: "string", description: "New event description (max 1000 characters)." },
+        scheduled_start_time: { type: "string", description: "New start time as an ISO 8601 datetime." },
+        scheduled_end_time: { type: "string", description: "New end time as an ISO 8601 datetime." },
+        channel_id: { type: "string", description: "New voice/stage channel ID (snowflake) for VOICE/STAGE_INSTANCE events." },
+        location: { type: "string", description: "New free-text location for EXTERNAL events." },
+        image: { type: "string", description: "New cover image URL." },
         status: {
           type: "string",
-          description: "'SCHEDULED', 'ACTIVE', 'COMPLETED', or 'CANCELED'.",
+          enum: ["SCHEDULED", "ACTIVE", "COMPLETED", "CANCELED"],
+          description: "Change event status. Allowed transitions only: SCHEDULED→ACTIVE→COMPLETED, or SCHEDULED→CANCELED.",
         },
       },
       required: ["guild_id", "event_id"],
@@ -88,40 +97,46 @@ export const definitions = [
   },
   {
     name: "discord_delete_scheduled_event",
-    description: "Delete a scheduled event.",
+    description:
+      "Permanently delete a scheduled event. IRREVERSIBLE. To cancel an event while keeping a record, use discord_edit_scheduled_event with status:'CANCELED' instead. Requires the Manage Events permission.",
+    annotations: { title: "Delete scheduled event", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        event_id: { type: "string" },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        event_id: { type: "string", description: "ID (snowflake) of the event to delete." },
       },
       required: ["guild_id", "event_id"],
     },
   },
   {
     name: "discord_get_event_subscribers",
-    description: "Get users who marked 'Interested' in a scheduled event.",
+    description:
+      "List the users who marked themselves 'Interested' in a scheduled event (user_id, username, avatar). Read-only. Returns a JSON array.",
+    annotations: { title: "Get event subscribers", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        event_id: { type: "string" },
-        limit: { type: "number", description: "1–100, default 25." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        event_id: { type: "string", description: "ID (snowflake) of the scheduled event." },
+        limit: { type: "number", description: "Max subscribers to return (1–100). Default 25." },
       },
       required: ["guild_id", "event_id"],
     },
   },
   {
     name: "discord_create_event_invite",
-    description: "Create an invite URL linked to a scheduled event.",
+    description:
+      "Create a shareable invite URL that points to a scheduled event, so recipients land on the event when joining. Requires the Create Instant Invite permission. Returns the invite URL.",
+    annotations: { title: "Create event invite", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
-        guild_id: { type: "string" },
-        event_id: { type: "string" },
-        channel_id: { type: "string", description: "Channel for the invite. Uses the first text channel if omitted." },
-        max_age: { type: "number", description: "Invite duration in seconds (0 = never). Default 86400." },
-        max_uses: { type: "number", description: "Max uses (0 = unlimited). Default 0." },
+        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
+        event_id: { type: "string", description: "ID (snowflake) of the scheduled event to link the invite to." },
+        channel_id: { type: "string", description: "Channel (snowflake) the invite points to. Defaults to the server's first text channel if omitted." },
+        max_age: { type: "number", description: "Invite lifetime in seconds; 0 means it never expires. Default 86400 (24h)." },
+        max_uses: { type: "number", description: "Maximum number of uses; 0 means unlimited. Default 0." },
       },
       required: ["guild_id", "event_id"],
     },

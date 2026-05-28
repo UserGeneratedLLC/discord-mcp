@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0] - 2026-05-28
+
+### Added
+- MCP tool `annotations` on all 97 tools (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`, `title`) so clients can apply safety policies and parallelize read-only calls
+- `ToolAnnotations` type and optional `annotations` field on `ToolDefinition`
+
+### Changed
+- Enriched every tool description with usage guidance, required Discord permissions, side effects / destructive behavior, and return value — improving agent reliability and directory tool-definition-quality scores
+- Documented every input-schema parameter (100% coverage), including nested embed/field properties, with formats and constraints
+- Extracted shared embed schema fragments (`EMBED_FIELD_PROPS`, `WEBHOOK_EMBED_PROPS`) to keep repeated definitions in sync
+- CONTRIBUTING: documented the tool-definition quality bar (description, annotations, parameter docs)
+
 ## [1.5.1] - 2026-05-27
 
 ### Fixed
