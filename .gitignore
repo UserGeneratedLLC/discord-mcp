@@ -10,3 +10,6 @@ dist/
 
 # Local-only files (not part of the published package)
 .mcp.json
+
+# Local audit / review artifacts
+AUDIT_VERIFICATION.md

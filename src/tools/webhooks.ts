@@ -1,5 +1,6 @@
-import { WebhookClient, EmbedBuilder, ColorResolvable } from "discord.js";
+import { WebhookClient } from "discord.js";
 import { discord, validateId } from "../client.js";
+import { buildEmbed } from "../embeds.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
 /** Embed input-schema fragment for webhook messages (shared by send/edit webhook-message tools). */
@@ -160,24 +161,6 @@ export const definitions = [
   },
 ];
 
-/** Builds an EmbedBuilder from a webhook embed arg object. */
-function buildWebhookEmbed(args: Record<string, unknown>): EmbedBuilder {
-  const embed = new EmbedBuilder();
-  if (args.title) embed.setTitle(args.title as string);
-  if (args.url) embed.setURL(args.url as string);
-  if (args.description) embed.setDescription(args.description as string);
-  if (args.color) embed.setColor(args.color as ColorResolvable);
-  if (args.footer) embed.setFooter({ text: args.footer as string });
-  if (args.image_url) embed.setImage(args.image_url as string);
-  if (args.thumbnail_url) embed.setThumbnail(args.thumbnail_url as string);
-  if (args.timestamp) embed.setTimestamp();
-  if (args.fields) {
-    const fields = args.fields as { name: string; value: string; inline?: boolean }[];
-    embed.addFields(fields.map((f) => ({ name: f.name, value: f.value, inline: f.inline ?? false })));
-  }
-  return embed;
-}
-
 /**
  * Handles webhook tools: create, send message via webhook,
  * edit, delete, and list webhooks.
@@ -212,7 +195,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
         if (args.embeds) {
           const embedArgs = args.embeds as Record<string, unknown>[];
           if (embedArgs.length > 10) throw new Error("Discord allows a maximum of 10 embeds per message.");
-          sendOptions.embeds = embedArgs.map((e) => buildWebhookEmbed(e));
+          sendOptions.embeds = embedArgs.map((e) => buildEmbed(e));
         }
         if (!sendOptions.content && !sendOptions.embeds) {
           throw new Error("At least one of content or embeds is required.");
@@ -282,7 +265,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
         if (args.content !== undefined) editOptions.content = args.content as string;
         if (args.embeds) {
           const embedArgs = args.embeds as Record<string, unknown>[];
-          editOptions.embeds = embedArgs.map((e) => buildWebhookEmbed(e));
+          editOptions.embeds = embedArgs.map((e) => buildEmbed(e));
         }
         await client.editMessage(args.message_id as string, editOptions);
         return { content: [{ type: "text", text: `✅ Webhook message ${args.message_id} edited.` }] };

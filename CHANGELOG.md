@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.6.2] - 2026-05-29
+
+### Fixed
+- `discord_get_reactions` / `discord_remove_reactions` now resolve custom emoji passed as `name:id`. The reaction cache is keyed by the emoji id (custom) or the unicode char (standard) — not the `name:id` form the tool schema accepts — so custom-emoji lookups previously failed with "No reaction found" even when the reaction existed. A new `findReaction()` helper normalizes the emoji to the cache key (handles `name:id`, `<:name:id>`, `<a:name:id>`, raw id, and unicode) (#25)
+- The role tools (`discord_edit_role`, `discord_delete_role`, `discord_get_role_members`, `discord_set_role_position`, `discord_set_role_icon`) now return a clear "Role not found" error for an unknown `role_id` instead of crashing on a null dereference — removed the misleading `as Role` cast that hid the `| null` return of `guild.roles.fetch()` (#25)
+
+### Changed
+- Dropped the unused `GuildModeration` and `GuildInvites` gateway intents. All ban/invite operations are REST-only and no code subscribes to their gateway events, so requesting them only widened the gateway footprint. `MessageContent`, `GuildMembers`, and `GuildScheduledEvents` are kept (actually consumed) (#25)
+- Extracted a shared `buildEmbed()` + `EMBED_FIELD_PROPS` into `src/embeds.ts`, removing three drifting copies across the message, DM, and webhook tools (#25)
+- Added a `deserializePermissions()` helper (inverse of `serializePermissions`), reused by `discord_create_role` and `discord_edit_role` instead of an inline `PermissionsBitField` expression duplicated twice (#25)
+
 ## [1.6.1] - 2026-05-29
 
 ### Fixed

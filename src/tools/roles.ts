@@ -1,5 +1,5 @@
-import { PermissionsBitField, ColorResolvable, Role } from "discord.js";
-import { discord, serializePermissions, validateId } from "../client.js";
+import { ColorResolvable, Role, Guild } from "discord.js";
+import { discord, serializePermissions, deserializePermissions, validateId } from "../client.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
 /** Tool definitions for creating, editing, deleting, and assigning roles. */
@@ -157,6 +157,17 @@ function parsePerms(raw: unknown): string[] | undefined {
 }
 
 /**
+ * Validates a role_id argument, fetches the role, and guarantees it exists.
+ * @throws {Error} If the id is not a valid snowflake or the role is not found.
+ */
+async function fetchRole(guild: Guild, rawId: unknown): Promise<Role> {
+  const id = validateId(rawId, "role_id");
+  const role = await guild.roles.fetch(id);
+  if (!role) throw new Error(`Role ${id} not found in this server.`);
+  return role;
+}
+
+/**
  * Handles role tools: list all roles, CRUD operations,
  * assign/remove from members, and list members by role.
  */
@@ -184,32 +195,28 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
         color: args.color as ColorResolvable | undefined,
         hoist: args.hoist as boolean | undefined,
         mentionable: args.mentionable as boolean | undefined,
-        permissions: perms
-          ? new PermissionsBitField(perms.map((p) => PermissionsBitField.Flags[p as keyof typeof PermissionsBitField.Flags]))
-          : undefined,
+        permissions: perms ? deserializePermissions(perms) : undefined,
       });
       return { content: [{ type: "text", text: `✅ Role "${role.name}" created (id: ${role.id}).` }] };
     }
 
     case "discord_edit_role": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const role = await guild.roles.fetch(args.role_id as string) as Role;
+      const role = await fetchRole(guild, args.role_id);
       const perms = parsePerms(args.permissions);
       await role.edit({
         name: args.name as string | undefined,
         color: args.color as ColorResolvable | undefined,
         hoist: args.hoist as boolean | undefined,
         mentionable: args.mentionable as boolean | undefined,
-        permissions: perms
-          ? new PermissionsBitField(perms.map((p) => PermissionsBitField.Flags[p as keyof typeof PermissionsBitField.Flags]))
-          : undefined,
+        permissions: perms ? deserializePermissions(perms) : undefined,
       });
       return { content: [{ type: "text", text: `✅ Role "${role.name}" updated.` }] };
     }
 
     case "discord_delete_role": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const role = await guild.roles.fetch(args.role_id as string) as Role;
+      const role = await fetchRole(guild, args.role_id);
       await role.delete(args.reason as string | undefined);
       return { content: [{ type: "text", text: `✅ Role "${role.name}" deleted.` }] };
     }
@@ -231,21 +238,21 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
     case "discord_get_role_members": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
       await guild.members.list({ limit: 1000 });
-      const role = await guild.roles.fetch(args.role_id as string) as Role;
+      const role = await fetchRole(guild, args.role_id);
       const members = role.members.map((m) => ({ id: m.id, username: m.user.tag, nickname: m.nickname }));
       return { content: [{ type: "text", text: JSON.stringify(members, null, 2) }] };
     }
 
     case "discord_set_role_position": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const role = await guild.roles.fetch(args.role_id as string) as Role;
+      const role = await fetchRole(guild, args.role_id);
       await role.setPosition(args.position as number);
       return { content: [{ type: "text", text: `✅ Role "${role.name}" moved to position ${args.position}.` }] };
     }
 
     case "discord_set_role_icon": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const role = await guild.roles.fetch(args.role_id as string) as Role;
+      const role = await fetchRole(guild, args.role_id);
       if (args.icon !== undefined) {
         await role.setIcon(args.icon === "null" || args.icon === null ? null : args.icon as string);
       }

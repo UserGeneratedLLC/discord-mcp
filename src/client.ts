@@ -21,9 +21,7 @@ export const discord = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildModeration,
     GatewayIntentBits.GuildScheduledEvents,
-    GatewayIntentBits.GuildInvites,
   ],
 });
 
@@ -112,5 +110,17 @@ export function validateId(value: unknown, label: string): string {
 export function serializePermissions(perms: Readonly<PermissionsBitField>): string[] {
   return Object.keys(PermissionsBitField.Flags).filter((flag) =>
     perms.has(flag as keyof typeof PermissionsBitField.Flags)
+  );
+}
+
+/**
+ * Builds a PermissionsBitField from an array of permission flag names.
+ * Inverse of {@link serializePermissions}.
+ * @param names - Permission flag names (e.g. ["SendMessages", "ViewChannel"]).
+ * @returns A PermissionsBitField with those flags set.
+ */
+export function deserializePermissions(names: string[]): PermissionsBitField {
+  return new PermissionsBitField(
+    names.map((p) => PermissionsBitField.Flags[p as keyof typeof PermissionsBitField.Flags])
   );
 }

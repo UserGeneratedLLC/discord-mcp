@@ -1,49 +1,15 @@
 import {
-  EmbedBuilder,
-  ColorResolvable,
   ChannelType,
   TextChannel,
   PublicThreadChannel,
   PrivateThreadChannel,
+  Message,
+  MessageReaction,
 } from "discord.js";
 import { discord, getTextChannel } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
+import { buildEmbed, EMBED_FIELD_PROPS } from "../embeds.js";
 import type { ToolModule, ToolResult } from "./types.js";
-
-/** Reusable input-schema fragment for a rich embed's fields (shared by send/edit/multiple embed tools). */
-const EMBED_FIELD_PROPS = {
-  title: { type: "string", description: "Embed title shown in bold at the top." },
-  url: { type: "string", description: "URL that makes the title clickable." },
-  description: { type: "string", description: "Main body text of the embed (supports Markdown)." },
-  color: { type: "string", description: "Side-bar color as a hex string, e.g. '#5865F2'." },
-  fields: {
-    type: "array",
-    description: "Up to 25 name/value field blocks rendered as a grid.",
-    items: {
-      type: "object",
-      properties: {
-        name: { type: "string", description: "Field heading." },
-        value: { type: "string", description: "Field body text." },
-        inline: { type: "boolean", description: "If true, render this field side-by-side with adjacent inline fields." },
-      },
-      required: ["name", "value"],
-    },
-  },
-  author: {
-    type: "object",
-    description: "Author block shown at the top of the embed.",
-    properties: {
-      name: { type: "string", description: "Author display name." },
-      icon_url: { type: "string", description: "Small icon shown next to the author name." },
-      url: { type: "string", description: "URL the author name links to." },
-    },
-    required: ["name"],
-  },
-  thumbnail_url: { type: "string", description: "Small image shown in the top-right corner." },
-  footer: { type: "string", description: "Footer text shown at the bottom of the embed." },
-  image_url: { type: "string", description: "Large image shown below the embed body." },
-  timestamp: { type: "boolean", description: "If true, stamp the embed with the current time." },
-} as const;
 
 /** Tool definitions for reading, sending, replying, editing, reacting, threading, embedding, deleting, pinning, and searching messages. */
 export const definitions = [
@@ -322,26 +288,16 @@ export const definitions = [
   },
 ];
 
-/** Builds an EmbedBuilder from a flat args object. */
-function buildEmbed(args: Record<string, unknown>): EmbedBuilder {
-  const embed = new EmbedBuilder();
-  if (args.title) embed.setTitle(args.title as string);
-  if (args.url) embed.setURL(args.url as string);
-  if (args.description) embed.setDescription(args.description as string);
-  if (args.color) embed.setColor(args.color as ColorResolvable);
-  if (args.footer) embed.setFooter({ text: args.footer as string });
-  if (args.image_url) embed.setImage(args.image_url as string);
-  if (args.thumbnail_url) embed.setThumbnail(args.thumbnail_url as string);
-  if (args.timestamp) embed.setTimestamp();
-  if (args.author) {
-    const a = args.author as { name: string; icon_url?: string; url?: string };
-    embed.setAuthor({ name: a.name, iconURL: a.icon_url, url: a.url });
-  }
-  if (args.fields) {
-    const fields = args.fields as { name: string; value: string; inline?: boolean }[];
-    embed.addFields(fields.map((f) => ({ name: f.name, value: f.value, inline: f.inline ?? false })));
-  }
-  return embed;
+/**
+ * Looks up a reaction on a message by emoji argument.
+ * The reaction cache is keyed by the emoji id (snowflake) for custom emoji and
+ * by the raw unicode char for standard emoji — NOT by the "name:id" / "<:name:id>"
+ * form the tool schema accepts — so a custom emoji is normalized to its id first.
+ */
+function findReaction(msg: Message, emoji: string): MessageReaction | undefined {
+  const customId = emoji.match(/^<a?:[^:]+:(\d{17,20})>$|^[^:]+:(\d{17,20})$/);
+  const key = customId ? (customId[1] ?? customId[2]) : emoji;
+  return msg.reactions.cache.get(key);
 }
 
 /**
@@ -489,7 +445,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
         await msg.reactions.removeAll();
         return { content: [{ type: "text", text: `✅ All reactions removed from message ${msg.id}.` }] };
       }
-      const reaction = msg.reactions.cache.get(args.emoji as string);
+      const reaction = findReaction(msg, args.emoji as string);
       if (!reaction) throw new Error(`No reaction found for emoji "${args.emoji}" on message ${msg.id}.`);
       if (args.user_id) {
         await reaction.users.remove(args.user_id as string);
@@ -502,7 +458,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
     case "discord_get_reactions": {
       const channel = await getTextChannel(args.channel_id as string);
       const msg = await channel.messages.fetch(args.message_id as string);
-      const reaction = msg.reactions.cache.get(args.emoji as string);
+      const reaction = findReaction(msg, args.emoji as string);
       if (!reaction) throw new Error(`No reaction found for emoji "${args.emoji}" on message ${msg.id}.`);
       const limit = Math.min(Number(args.limit ?? DEFAULTS.LIMIT), MAX_FETCH_LIMIT);
       const users = await reaction.users.fetch({ limit });
