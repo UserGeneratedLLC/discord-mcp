@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.6.1] - 2026-05-29
+
+### Fixed
+- `discord_pin_message` description no longer claims "Requires the Manage Messages permission". Discord introduced a dedicated **Pin Messages** permission in early 2026 (separate from Manage Messages), and discord.js dropped the Manage Messages check from `Message#pinnable`. The tool now points at the correct permission so the model expects the right one (#21)
+
 ## [1.6.0] - 2026-05-28
 
 ### Added

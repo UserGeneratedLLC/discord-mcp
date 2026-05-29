@@ -219,7 +219,7 @@ export const definitions = [
   {
     name: "discord_pin_message",
     description:
-      "Pin or unpin a message in a channel, controlled by the pin flag. Requires the Manage Messages permission. A channel holds at most 50 pins. Idempotent: pinning an already-pinned message (or unpinning an unpinned one) has no additional effect.",
+      "Pin or unpin a message in a channel, controlled by the pin flag. Requires the Pin Messages permission (a dedicated permission since early 2026, separate from Manage Messages). A channel holds at most 50 pins. Idempotent: pinning an already-pinned message (or unpinning an unpinned one) has no additional effect.",
     annotations: { title: "Pin or unpin message", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
