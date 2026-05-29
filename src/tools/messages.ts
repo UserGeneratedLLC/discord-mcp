@@ -261,7 +261,7 @@ export const definitions = [
   {
     name: "discord_fetch_pinned_messages",
     description:
-      "List all pinned messages in a channel as a JSON array (id, author, content, timestamp). Read-only. Use discord_pin_message to change which messages are pinned.",
+      "List all pinned messages in a channel as a JSON array (id, author, content, timestamp, pinnedAt). Read-only. Use discord_pin_message to change which messages are pinned.",
     annotations: { title: "Fetch pinned messages", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
