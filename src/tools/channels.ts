@@ -144,7 +144,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
     }
 
     case "discord_delete_channel": {
-      const channel = await discord.channels.fetch(args.channel_id as string);
+      const channel = await discord.channels.fetch(validateId(args.channel_id, "channel_id"));
       if (!channel) throw new Error("Channel not found.");
       const channelName = "name" in channel ? channel.name : channel.id;
       await channel.delete(args.reason as string | undefined);

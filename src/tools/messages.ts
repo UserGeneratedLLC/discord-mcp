@@ -6,7 +6,7 @@ import {
   Message,
   MessageReaction,
 } from "discord.js";
-import { discord, getTextChannel } from "../client.js";
+import { discord, getTextChannel, clampInt } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
 import { buildEmbed, EMBED_FIELD_PROPS } from "../embeds.js";
 import type { ToolModule, ToolResult } from "./types.js";
@@ -261,7 +261,7 @@ export const definitions = [
   {
     name: "discord_fetch_pinned_messages",
     description:
-      "List all pinned messages in a channel as a JSON array (id, author, content, timestamp). Read-only. Use discord_pin_message to change which messages are pinned.",
+      "List all pinned messages in a channel as a JSON array (id, author, content, timestamp, pinnedAt). Read-only. Use discord_pin_message to change which messages are pinned.",
     annotations: { title: "Fetch pinned messages", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
@@ -308,8 +308,8 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
   switch (name) {
     case "discord_read_messages": {
       const channel = await getTextChannel(args.channel_id as string);
-      const limit = Math.min(Number(args.limit ?? DEFAULTS.MESSAGES), MAX_FETCH_LIMIT);
-      const messages = await channel.messages.fetch({ limit });
+      const limit = clampInt(args.limit, 1, MAX_FETCH_LIMIT, DEFAULTS.MESSAGES);
+      const messages = await channel.messages.fetch({ limit, cache: false });
       const result = [...messages.values()]
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
         .map((m) => ({
@@ -372,7 +372,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_bulk_delete_messages": {
       const channel = await getTextChannel(args.channel_id as string);
-      const count = Math.min(Math.max(Number(args.count ?? 2), 2), 100);
+      const count = clampInt(args.count, 2, 100, 2);
       const deleted = await channel.bulkDelete(count, true);
       return { content: [{ type: "text", text: `✅ Deleted ${deleted.size} messages in #${channel.name}.` }] };
     }
@@ -421,8 +421,8 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_search_messages": {
       const channel = await getTextChannel(args.channel_id as string);
-      const limit = Math.min(Math.max(Number(args.limit ?? MAX_FETCH_LIMIT), 1), MAX_FETCH_LIMIT);
-      const messages = await channel.messages.fetch({ limit });
+      const limit = clampInt(args.limit, 1, MAX_FETCH_LIMIT, MAX_FETCH_LIMIT);
+      const messages = await channel.messages.fetch({ limit, cache: false });
       const keyword = (args.keyword as string).toLowerCase();
       const matches = [...messages.values()]
         .filter((m) => m.content.toLowerCase().includes(keyword))
@@ -460,7 +460,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
       const msg = await channel.messages.fetch(args.message_id as string);
       const reaction = findReaction(msg, args.emoji as string);
       if (!reaction) throw new Error(`No reaction found for emoji "${args.emoji}" on message ${msg.id}.`);
-      const limit = Math.min(Number(args.limit ?? DEFAULTS.LIMIT), MAX_FETCH_LIMIT);
+      const limit = clampInt(args.limit, 1, MAX_FETCH_LIMIT, DEFAULTS.LIMIT);
       const users = await reaction.users.fetch({ limit });
       const result = [...users.values()].map((u) => ({ id: u.id, username: u.username, bot: u.bot }));
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
@@ -468,9 +468,10 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_fetch_pinned_messages": {
       const channel = await getTextChannel(args.channel_id as string);
-      const pinned = await channel.messages.fetchPinned();
-      const result = [...pinned.values()].map((m) => ({
-        id: m.id, author: m.author.tag, content: m.content, timestamp: m.createdAt.toISOString(),
+      const pinned = await channel.messages.fetchPins();
+      const result = pinned.items.map(({ message: m, pinnedAt }) => ({
+        id: m.id, author: m.author.tag, content: m.content,
+        timestamp: m.createdAt.toISOString(), pinnedAt: pinnedAt.toISOString(),
       }));
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }

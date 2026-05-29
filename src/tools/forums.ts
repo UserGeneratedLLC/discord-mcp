@@ -1,5 +1,5 @@
 import { ChannelType, ForumChannel, ThreadChannel } from "discord.js";
-import { discord, validateId } from "../client.js";
+import { discord, validateId, clampInt } from "../client.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
 /** Tool definitions for managing forum channels, posts, tags, and threads. */
@@ -70,12 +70,14 @@ export const definitions = [
   {
     name: "discord_list_forum_threads",
     description:
-      "List every post in a forum channel, both active and archived (id, name, state, tags, message count). Read-only. Use discord_get_forum_post to read one post's messages.",
+      "List posts in a forum channel. Returns { threads: [...], hasMore, nextBefore }. The first call (no `before`) includes all active posts plus the first page of archived posts; archived posts are paginated, so if hasMore is true pass nextBefore back as `before` to fetch older archived posts. Read-only. Use discord_get_forum_post to read one post's messages.",
     annotations: { title: "List forum threads", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         forum_channel_id: { type: "string", description: "ID (snowflake) of the forum channel to list posts from." },
+        limit: { type: "number", description: "Max archived posts per page (1–100). Default 100." },
+        before: { type: "string", description: "Pagination cursor: an ISO timestamp. Pass the previous response's nextBefore to fetch older archived posts. When set, active posts are omitted." },
       },
       required: ["forum_channel_id"],
     },
@@ -232,7 +234,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_get_forum_post": {
       const thread = await getThreadChannel(args.thread_id as string);
-      const limit = Math.min(Number(args.limit ?? 20), 100);
+      const limit = clampInt(args.limit, 1, 100, 20);
       const messages = await thread.messages.fetch({ limit });
       const result = {
         id: thread.id,
@@ -256,12 +258,16 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_list_forum_threads": {
       const forum = await getForumChannel(args.forum_channel_id as string);
-      const active = await forum.threads.fetchActive();
-      const archived = await forum.threads.fetchArchived();
-      const threads = [
-        ...active.threads.values(),
-        ...archived.threads.values(),
-      ].map((t) => ({
+      const limit = clampInt(args.limit, 1, 100, 100);
+      const before = args.before !== undefined ? new Date(String(args.before)) : undefined;
+      const collected: ThreadChannel[] = [];
+      if (before === undefined) {
+        const active = await forum.threads.fetchActive();
+        collected.push(...active.threads.values());
+      }
+      const archived = await forum.threads.fetchArchived({ limit, before });
+      collected.push(...archived.threads.values());
+      const threads = collected.map((t) => ({
         id: t.id,
         name: t.name,
         archived: t.archived,
@@ -270,7 +276,9 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
         appliedTags: t.appliedTags,
         createdAt: t.createdAt?.toISOString(),
       }));
-      return { content: [{ type: "text", text: JSON.stringify(threads, null, 2) }] };
+      const lastArchived = archived.threads.last();
+      const nextBefore = archived.hasMore ? lastArchived?.archivedAt?.toISOString() ?? null : null;
+      return { content: [{ type: "text", text: JSON.stringify({ threads, hasMore: archived.hasMore, nextBefore }, null, 2) }] };
     }
 
     case "discord_reply_to_forum": {

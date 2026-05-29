@@ -223,24 +223,36 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_add_role": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const member = await guild.members.fetch(args.user_id as string);
-      await member.roles.add(args.role_id as string, args.reason as string | undefined);
+      const member = await guild.members.fetch(validateId(args.user_id, "user_id"));
+      await member.roles.add(validateId(args.role_id, "role_id"), args.reason as string | undefined);
       return { content: [{ type: "text", text: `✅ Role added to ${member.user.tag}.` }] };
     }
 
     case "discord_remove_role": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const member = await guild.members.fetch(args.user_id as string);
-      await member.roles.remove(args.role_id as string, args.reason as string | undefined);
+      const member = await guild.members.fetch(validateId(args.user_id, "user_id"));
+      await member.roles.remove(validateId(args.role_id, "role_id"), args.reason as string | undefined);
       return { content: [{ type: "text", text: `✅ Role removed from ${member.user.tag}.` }] };
     }
 
     case "discord_get_role_members": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      await guild.members.list({ limit: 1000 });
       const role = await fetchRole(guild, args.role_id);
+      // No "members of a role" endpoint exists, so populate the cache then filter (1000/page max).
+      const MAX_PAGES = 20;
+      let after: string | undefined;
+      let truncated = true;
+      for (let i = 0; i < MAX_PAGES; i++) {
+        const page = await guild.members.list({ limit: 1000, after });
+        if (page.size < 1000) { truncated = false; break; }
+        after = page.lastKey();
+      }
       const members = role.members.map((m) => ({ id: m.id, username: m.user.tag, nickname: m.nickname }));
-      return { content: [{ type: "text", text: JSON.stringify(members, null, 2) }] };
+      return { content: [{ type: "text", text: JSON.stringify({
+        members,
+        truncated,
+        note: truncated ? `Only the first ${MAX_PAGES * 1000} members were scanned; results may be incomplete on very large servers.` : undefined,
+      }, null, 2) }] };
     }
 
     case "discord_set_role_position": {

@@ -1,4 +1,4 @@
-import { discord, validateId } from "../client.js";
+import { discord, validateId, clampInt } from "../client.js";
 import { buildEmbed, EMBED_FIELD_PROPS } from "../embeds.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
@@ -176,7 +176,7 @@ async function handle(
     case "discord_read_dms": {
       const user = await discord.users.fetch(validateId(args.user_id, "user_id"));
       const dm = await user.createDM();
-      const limit = Math.min(Math.max(Number(args.limit ?? 20), 1), 100);
+      const limit = clampInt(args.limit, 1, 100, 20);
       const messages = await dm.messages.fetch({ limit });
       const result = [...messages.values()]
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)

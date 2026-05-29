@@ -1,6 +1,7 @@
 import "dotenv/config";
 import {
   Client,
+  Events,
   GatewayIntentBits,
   TextChannel,
   ThreadChannel,
@@ -15,6 +16,9 @@ import {
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 
+/** Maximum time to wait for the gateway to reach READY before giving up. */
+const LOGIN_TIMEOUT_MS = 30_000;
+
 export const discord = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -23,10 +27,20 @@ export const discord = new Client({
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildScheduledEvents,
   ],
+  rest: { retries: 3, timeout: 15_000 },
 });
 
 let discordReady = false;
 let loginPromise: Promise<void> | null = null;
+
+// Without an 'error' listener, an emitted client error crashes the Node process.
+discord.on(Events.Error, (err) => console.error("Discord client error:", err.message));
+discord.on(Events.ShardError, (err) => console.error("Discord shard error:", err.message));
+discord.on(Events.Invalidated, () => {
+  console.error("Discord session invalidated — connection is dead; the next tool call will re-login.");
+  discordReady = false;
+  loginPromise = null;
+});
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,12 +59,23 @@ export async function ensureConnected(): Promise<void> {
 
   if (!loginPromise) {
     loginPromise = new Promise<void>((resolve, reject) => {
-      discord.once("ready", () => {
+      const onReady = () => {
+        clearTimeout(timer);
         discordReady = true;
         console.error(`✅  Discord bot connected as ${discord.user?.tag}`);
         resolve();
-      });
+      };
+      const timer = setTimeout(() => {
+        discord.off(Events.ClientReady, onReady);
+        loginPromise = null;
+        reject(new Error(
+          `Discord did not reach READY within ${LOGIN_TIMEOUT_MS / 1000}s. Check the token and that the Server Members / Message Content privileged intents are enabled in the Developer Portal.`
+        ));
+      }, LOGIN_TIMEOUT_MS);
+      discord.once(Events.ClientReady, onReady);
       discord.login(DISCORD_TOKEN).catch((err) => {
+        clearTimeout(timer);
+        discord.off(Events.ClientReady, onReady);
         loginPromise = null;
         reject(new Error(`Discord login failed: ${err.message}`));
       });
@@ -70,9 +95,10 @@ export async function ensureConnected(): Promise<void> {
  * @throws {Error} If the channel does not exist or is neither a text channel nor a thread.
  */
 export async function getTextChannel(channelId: string): Promise<TextChannel | ThreadChannel> {
-  const channel = await discord.channels.fetch(channelId);
+  const id = validateId(channelId, "channel_id");
+  const channel = await discord.channels.fetch(id);
   if (!channel || (!(channel instanceof TextChannel) && !(channel instanceof ThreadChannel)))
-    throw new Error(`Channel ${channelId} is not a text or thread channel or doesn't exist.`);
+    throw new Error(`Channel ${id} is not a text or thread channel or doesn't exist.`);
   return channel;
 }
 
@@ -83,9 +109,10 @@ export async function getTextChannel(channelId: string): Promise<TextChannel | T
  * @throws {Error} If the channel does not exist or is not a guild channel.
  */
 export async function getGuildChannel(channelId: string): Promise<GuildChannel> {
-  const channel = await discord.channels.fetch(channelId);
+  const id = validateId(channelId, "channel_id");
+  const channel = await discord.channels.fetch(id);
   if (!channel || !(channel instanceof GuildChannel))
-    throw new Error(`Channel ${channelId} is not a guild channel or doesn't exist.`);
+    throw new Error(`Channel ${id} is not a guild channel or doesn't exist.`);
   return channel;
 }
 
@@ -100,6 +127,35 @@ export function validateId(value: unknown, label: string): string {
   const id = String(value ?? "");
   if (!/^\d{17,20}$/.test(id)) throw new Error(`Invalid ${label}: "${id}". Must be a Discord snowflake ID (17-20 digits).`);
   return id;
+}
+
+/**
+ * Coerces a value to an integer clamped to [min, max], using fallback when it is not a finite number.
+ * @param value - The raw value to coerce.
+ * @param min - Lower bound (inclusive).
+ * @param max - Upper bound (inclusive).
+ * @param fallback - Returned when value is missing or non-numeric.
+ */
+export function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(Math.max(Math.trunc(n), min), max);
+}
+
+/**
+ * Validates a value is a finite integer within [min, max].
+ * @param value - The raw value to validate.
+ * @param min - Lower bound (inclusive).
+ * @param max - Upper bound (inclusive).
+ * @param label - Human-readable label used in the error message.
+ * @throws {Error} If the value is not an integer in range.
+ */
+export function validateInt(value: unknown, min: number, max: number, label: string): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < min || n > max) {
+    throw new Error(`Invalid ${label}: "${String(value)}". Must be an integer between ${min} and ${max}.`);
+  }
+  return n;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { GuildMember } from "discord.js";
-import { discord, serializePermissions, validateId } from "../client.js";
+import { discord, serializePermissions, validateId, clampInt, validateInt } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
@@ -8,13 +8,14 @@ export const definitions = [
   {
     name: "discord_list_members",
     description:
-      "List members of a server with their roles, in join order. Returns a JSON array (id, username, nickname, roles, join date). Use discord_search_members to find specific members by name, or discord_get_member_info for one member's full details. Read-only.",
+      "List members of a server with their roles, ordered by user ID. Returns { members: [...], nextCursor }. A page holds up to 1000 members; if nextCursor is non-null, pass it back as `after` to fetch the next page. Use discord_search_members to find specific members by name, or discord_get_member_info for one member's full details. Read-only.",
     annotations: { title: "List members", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
-        limit: { type: "number", description: "How many members to return (1–1000). Default 50." },
+        limit: { type: "number", description: "How many members per page (1–1000). Default 50." },
+        after: { type: "string", description: "Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page." },
       },
       required: ["guild_id"],
     },
@@ -129,13 +130,14 @@ export const definitions = [
   {
     name: "discord_list_bans",
     description:
-      "List the users currently banned from the server, with their ban reasons. Returns a JSON array (user_id, username, reason). Requires the Ban Members permission. Read-only.",
+      "List the users banned from the server, with their ban reasons. Returns { bans: [...], nextCursor }. A page holds up to 1000 bans; if nextCursor is non-null, pass it back as `after` to fetch the next page. Requires the Ban Members permission. Read-only.",
     annotations: { title: "List bans", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
-        limit: { type: "number", description: "Optional max number of bans to fetch. Omit to fetch all." },
+        limit: { type: "number", description: "Max bans per page (1–1000). Default 1000." },
+        after: { type: "string", description: "Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page." },
       },
       required: ["guild_id"],
     },
@@ -143,7 +145,7 @@ export const definitions = [
   {
     name: "discord_bulk_ban",
     description:
-      "Ban many users in a single call, intended for raid mitigation. Requires the Ban Members permission. Returns counts of banned vs failed users. Use discord_ban_member for a single ban with finer control.",
+      "Ban many users in a single call, intended for raid mitigation. SAFE BY DEFAULT: dry_run is true unless explicitly set to false, so call it first to preview the resolved user IDs, then re-call with dry_run:false to actually ban them. Requires the Ban Members permission. Returns counts of banned vs failed users. Use discord_ban_member for a single ban with finer control.",
     annotations: { title: "Bulk ban", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     inputSchema: {
       type: "object",
@@ -151,6 +153,7 @@ export const definitions = [
         guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
         user_ids: { type: "array", items: { type: "string" }, description: "Array of user IDs (snowflakes) to ban." },
         delete_message_seconds: { type: "number", description: "Also delete each user's messages from the last N seconds (0–604800, i.e. up to 7 days). Default 0." },
+        dry_run: { type: "boolean", description: "If true (default), only returns the user IDs that would be banned without banning anyone. Set false to actually ban." },
         reason: { type: "string", description: "Optional reason recorded in the server audit log." },
       },
       required: ["guild_id", "user_ids"],
@@ -183,19 +186,21 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
   switch (name) {
     case "discord_list_members": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const limit = Math.min(Number(args.limit ?? DEFAULTS.MEMBERS), DEFAULTS.MEMBERS_MAX);
-      const members = await guild.members.list({ limit });
+      const limit = clampInt(args.limit, 1, DEFAULTS.MEMBERS_MAX, DEFAULTS.MEMBERS);
+      const after = args.after !== undefined ? validateId(args.after, "after") : undefined;
+      const members = await guild.members.list({ limit, after });
       const result = [...members.values()].map((m: GuildMember) => ({
         id: m.id, username: m.user.tag, nickname: m.nickname,
         roles: m.roles.cache.filter((r) => r.name !== "@everyone").map((r) => ({ id: r.id, name: r.name })),
         joinedAt: m.joinedAt?.toISOString(),
       }));
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const nextCursor = members.size === limit ? members.lastKey() ?? null : null;
+      return { content: [{ type: "text", text: JSON.stringify({ members: result, nextCursor }, null, 2) }] };
     }
 
     case "discord_get_member_info": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const member = await guild.members.fetch(args.user_id as string);
+      const member = await guild.members.fetch(validateId(args.user_id, "user_id"));
       return {
         content: [{
           type: "text", text: JSON.stringify({
@@ -211,31 +216,33 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_kick_member": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const member = await guild.members.fetch(args.user_id as string);
+      const member = await guild.members.fetch(validateId(args.user_id, "user_id"));
       await member.kick(args.reason as string | undefined);
       return { content: [{ type: "text", text: `✅ ${member.user.tag} has been kicked.` }] };
     }
 
     case "discord_ban_member": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const deleteDays = Math.min(Math.max(Number(args.delete_message_days ?? 0), 0), 7);
-      await guild.members.ban(args.user_id as string, {
+      const userId = validateId(args.user_id, "user_id");
+      const deleteDays = clampInt(args.delete_message_days, 0, 7, 0);
+      await guild.members.ban(userId, {
         reason: args.reason as string | undefined,
         deleteMessageSeconds: deleteDays * 86400,
       });
-      return { content: [{ type: "text", text: `✅ User ${args.user_id} has been banned.` }] };
+      return { content: [{ type: "text", text: `✅ User ${userId} has been banned.` }] };
     }
 
     case "discord_unban_member": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      await guild.members.unban(args.user_id as string, args.reason as string | undefined);
-      return { content: [{ type: "text", text: `✅ User ${args.user_id} has been unbanned.` }] };
+      const userId = validateId(args.user_id, "user_id");
+      await guild.members.unban(userId, args.reason as string | undefined);
+      return { content: [{ type: "text", text: `✅ User ${userId} has been unbanned.` }] };
     }
 
     case "discord_timeout_member": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const member = await guild.members.fetch(args.user_id as string);
-      const duration = args.duration_minutes as number;
+      const member = await guild.members.fetch(validateId(args.user_id, "user_id"));
+      const duration = validateInt(args.duration_minutes, 0, 40320, "duration_minutes");
       const until = duration > 0 ? new Date(Date.now() + duration * 60 * 1000) : null;
       await member.disableCommunicationUntil(until, args.reason as string | undefined);
       return {
@@ -248,7 +255,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_search_members": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const limit = Math.min(Number(args.limit ?? DEFAULTS.LIMIT), MAX_FETCH_LIMIT);
+      const limit = clampInt(args.limit, 1, MAX_FETCH_LIMIT, DEFAULTS.LIMIT);
       const members = await guild.members.search({ query: args.query as string, limit });
       const result = [...members.values()].map((m: GuildMember) => ({
         id: m.id, username: m.user.tag, nickname: m.nickname,
@@ -259,7 +266,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_set_nickname": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const member = await guild.members.fetch(args.user_id as string);
+      const member = await guild.members.fetch(validateId(args.user_id, "user_id"));
       const nick = args.nickname === null || args.nickname === "null" ? null : String(args.nickname);
       await member.setNickname(nick, args.reason as string | undefined);
       return { content: [{ type: "text", text: nick ? `✅ Nickname for ${member.user.tag} set to "${nick}".` : `✅ Nickname cleared for ${member.user.tag}.` }] };
@@ -267,20 +274,26 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_list_bans": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const limit = args.limit ? Number(args.limit) : undefined;
-      const bans = await guild.bans.fetch({ limit, cache: false });
+      const limit = clampInt(args.limit, 1, 1000, 1000);
+      const after = args.after !== undefined ? validateId(args.after, "after") : undefined;
+      const bans = await guild.bans.fetch({ limit, after, cache: false });
       const result = [...bans.values()].map((ban) => ({
         user_id: ban.user.id, username: ban.user.tag, reason: ban.reason ?? null,
       }));
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      const nextCursor = bans.size === limit ? bans.lastKey() ?? null : null;
+      return { content: [{ type: "text", text: JSON.stringify({ bans: result, nextCursor }, null, 2) }] };
     }
 
     case "discord_bulk_ban": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const userIds = args.user_ids as string[];
-      if (!Array.isArray(userIds) || userIds.length === 0) throw new Error("user_ids must be a non-empty array.");
+      const rawIds = args.user_ids;
+      if (!Array.isArray(rawIds) || rawIds.length === 0) throw new Error("user_ids must be a non-empty array.");
+      const userIds = rawIds.map((id) => validateId(id, "user_ids[]"));
+      if (args.dry_run !== false) {
+        return { content: [{ type: "text", text: `🔍 Dry run: ${userIds.length} users would be banned:\n${JSON.stringify(userIds, null, 2)}` }] };
+      }
       const result = await guild.members.bulkBan(userIds, {
-        deleteMessageSeconds: Number(args.delete_message_seconds ?? 0),
+        deleteMessageSeconds: clampInt(args.delete_message_seconds, 0, 604800, 0),
         reason: args.reason as string | undefined,
       });
       return { content: [{ type: "text", text: `✅ Bulk ban complete: ${result.bannedUsers.length} banned, ${result.failedUsers.length} failed.` }] };
@@ -288,7 +301,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
 
     case "discord_prune_members": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
-      const days = Number(args.days);
+      const days = validateInt(args.days, 1, 30, "days");
       const dryRun = args.dry_run !== false;
       const roles = args.roles as string[] | undefined;
       const pruned = await guild.members.prune({

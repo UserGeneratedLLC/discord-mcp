@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.7.0] - 2026-05-29
+
+### Fixed
+- `discord_get_role_members` no longer silently truncates at 1000 members. Discord has no "members of a role" endpoint, so it now paginates the full roster (1000/page, capped at 20 pages) before filtering, and returns a `truncated` flag when the cap is hit on very large servers
+- `discord_list_bans` is now paginated. A single fetch only ever returned the first page (≤1000) while the description claimed it fetched all; it now returns `{ bans, nextCursor }` and accepts an `after` cursor
+- `discord_fetch_pinned_messages` migrated from the deprecated `MessageManager#fetchPinned()` (removed in discord.js v15) to `fetchPins()`, and now also returns `pinnedAt`
+- `discord_timeout_member` and `discord_prune_members` validate their numeric inputs (`duration_minutes`, `days`) instead of casting blindly, rejecting NaN / out-of-range values with a clear error
+
+### Changed
+- Renamed the `ready` gateway listener to `clientReady` — forward-compatible with discord.js v15 (where `ready` no longer fires) and silences the v14 deprecation warning
+- Connection robustness: login now races a 30s READY timeout (no more indefinite hangs), resets its in-flight state on failure so the next call retries, and registers `error` / `shardError` / `invalidated` listeners (an unhandled client error could previously crash the process). REST retries/timeout configured; process-level `unhandledRejection` / `uncaughtException` handlers added
+- Tool errors now surface the underlying `DiscordAPIError` code + HTTP status with a plain-language hint (e.g. 50013 → missing permission, 10008 → unknown message) instead of a bare message
+- Cursor pagination on large lists: `discord_list_members`, `discord_get_event_subscribers`, and `discord_list_forum_threads` now return a cursor (`nextCursor` / `nextBefore` + `hasMore`) and accept `after` / `before` to page, instead of silently returning only the first page. These tools now return an object (`{ items, nextCursor }`) rather than a bare array
+- Uniform snowflake validation: `getTextChannel` / `getGuildChannel` validate `channel_id` internally, and `user_id` / `role_id` are validated in the member and role tools (and `discord_delete_channel`), so malformed IDs give a clear error instead of an opaque API failure
+- Numeric inputs (`limit`, `count`, `delete_message_days`, audit-log/forum/DM limits, …) are coerced and clamped via shared `clampInt` / `validateInt` helpers, preventing NaN from reaching the Discord API
+- Read-only message fetches (`discord_read_messages`, `discord_search_messages`) pass `{ cache: false }` to avoid unbounded message-cache growth
+- `discord_bulk_ban` is now safe-by-default with a `dry_run` flag (previews the resolved user IDs; set `dry_run:false` to actually ban), mirroring `discord_prune_members`, and validates each user ID
+
 ## [1.6.2] - 2026-05-29
 
 ### Fixed
