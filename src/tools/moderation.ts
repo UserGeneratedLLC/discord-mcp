@@ -1,4 +1,4 @@
-import { discord, validateId } from "../client.js";
+import { discord, validateId, clampInt } from "../client.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
 /** Tool definitions for server moderation (audit log). */
@@ -29,7 +29,7 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
     case "discord_get_audit_log": {
       const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
       const logs = await guild.fetchAuditLogs({
-        limit: Math.min(Number(args.limit ?? 25), 100),
+        limit: clampInt(args.limit, 1, 100, 25),
         type: args.action_type as number | undefined,
       });
       const result = logs.entries.map((entry) => ({

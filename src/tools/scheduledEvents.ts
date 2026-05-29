@@ -1,5 +1,5 @@
 import { GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel, GuildScheduledEventStatus, type GuildScheduledEventCreateOptions, type GuildScheduledEventEditOptions } from "discord.js";
-import { discord, validateId } from "../client.js";
+import { discord, validateId, clampInt } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
 import type { ToolModule, ToolResult } from "./types.js";
 
@@ -112,14 +112,15 @@ export const definitions = [
   {
     name: "discord_get_event_subscribers",
     description:
-      "List the users who marked themselves 'Interested' in a scheduled event (user_id, username, avatar). Read-only. Returns a JSON array.",
+      "List the users who marked themselves 'Interested' in a scheduled event. Returns { subscribers: [...], nextCursor }. A page holds up to 100 users; if nextCursor is non-null, pass it back as `after` to fetch the next page. Read-only.",
     annotations: { title: "Get event subscribers", readOnlyHint: true, openWorldHint: true },
     inputSchema: {
       type: "object",
       properties: {
         guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
         event_id: { type: "string", description: "ID (snowflake) of the scheduled event." },
-        limit: { type: "number", description: "Max subscribers to return (1–100). Default 25." },
+        limit: { type: "number", description: "Max subscribers per page (1–100). Default 25." },
+        after: { type: "string", description: "Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page." },
       },
       required: ["guild_id", "event_id"],
     },
@@ -290,14 +291,16 @@ export async function handle(
       const eventId = validateId(args.event_id, "event_id");
       const guild = await discord.guilds.fetch(guildId);
       const event = await guild.scheduledEvents.fetch(eventId);
-      const limit = Math.min(Number(args.limit ?? DEFAULTS.LIMIT), MAX_FETCH_LIMIT);
-      const subscribers = await event.fetchSubscribers({ limit });
+      const limit = clampInt(args.limit, 1, MAX_FETCH_LIMIT, DEFAULTS.LIMIT);
+      const after = args.after !== undefined ? validateId(args.after, "after") : undefined;
+      const subscribers = await event.fetchSubscribers({ limit, after });
       const list = [...subscribers.values()].map((sub) => ({
         user_id: sub.user.id,
         username: sub.user.username,
         avatar: sub.user.displayAvatarURL(),
       }));
-      return { content: [{ type: "text", text: JSON.stringify(list, null, 2) }] };
+      const nextCursor = subscribers.size === limit ? subscribers.lastKey() ?? null : null;
+      return { content: [{ type: "text", text: JSON.stringify({ subscribers: list, nextCursor }, null, 2) }] };
     }
 
     case "discord_create_event_invite": {
