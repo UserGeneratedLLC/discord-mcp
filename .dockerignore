@@ -3,3 +3,11 @@ dist
 .git
 .github
 .env
+.env.example
+.mcp.json
+.claude
+*.md
+.dockerignore
+.prettierrc
+eslint.config.mjs
+test

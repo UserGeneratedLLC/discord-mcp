@@ -16,7 +16,7 @@ LABEL org.opencontainers.image.license="MIT"
 
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci --omit=dev && \
+RUN npm ci --omit=dev && npm cache clean --force && \
     addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 
