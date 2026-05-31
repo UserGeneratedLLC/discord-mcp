@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { discord, clampInt } from "../client.js";
+import { discord } from "../client.js";
 import { buildEmbed, embedFieldsShape } from "../embeds.js";
-import { defineTool, defineModule, snowflake } from "./define.js";
+import { defineTool, defineModule, snowflake, intIn } from "./define.js";
 
 const userId = snowflake.describe("Discord user ID (snowflake) of the DM recipient.");
 const messageId = snowflake.describe("ID of the target message within the DM conversation.");
@@ -109,12 +109,12 @@ const tools = [
     annotations: { title: "Read DMs", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       user_id: userId,
-      limit: z.number().optional().describe("How many recent messages to fetch (1–100). Default 20."),
+      limit: intIn(1, 100).default(20).describe("How many recent messages to fetch (1–100). Default 20."),
     }),
     handle: async ({ user_id, limit }) => {
       const user = await discord.users.fetch(user_id);
       const dm = await user.createDM();
-      const messages = await dm.messages.fetch({ limit: clampInt(limit, 1, 100, 20) });
+      const messages = await dm.messages.fetch({ limit });
       const result = [...messages.values()]
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
         .map((m) => ({

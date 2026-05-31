@@ -7,10 +7,10 @@ import {
   MessageReaction,
 } from "discord.js";
 import { z } from "zod";
-import { discord, getTextChannel, clampInt } from "../client.js";
+import { discord, getTextChannel } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
 import { buildEmbed, embedFieldsShape, embedObjectSchema } from "../embeds.js";
-import { defineModule, defineTool, snowflake } from "./define.js";
+import { defineModule, defineTool, snowflake, intIn } from "./define.js";
 
 const channelId = snowflake.describe("ID (snowflake) of the channel or thread.");
 const messageId = snowflake.describe("ID of the message.");
@@ -36,12 +36,11 @@ const tools = [
     annotations: { title: "Read messages", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to read from."),
-      limit: z.number().optional().describe("How many recent messages to fetch (1–100). Default 20."),
+      limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.MESSAGES).describe("How many recent messages to fetch (1–100). Default 20."),
     }),
     handle: async ({ channel_id, limit }) => {
       const channel = await getTextChannel(channel_id);
-      const max = clampInt(limit, 1, MAX_FETCH_LIMIT, DEFAULTS.MESSAGES);
-      const messages = await channel.messages.fetch({ limit: max, cache: false });
+      const messages = await channel.messages.fetch({ limit, cache: false });
       const result = [...messages.values()]
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
         .map((m) => ({
@@ -127,11 +126,14 @@ const tools = [
       channel_id: snowflake.describe("ID (snowflake) of the parent text channel. For a message-based thread, the channel containing message_id."),
       name: z.string().describe("Name of the thread to create (max 100 characters)."),
       message_id: snowflake.optional().describe("Optional. Message to branch the thread from. If omitted, a standalone thread is created in the channel."),
-      auto_archive_duration: z.number().optional().describe("Minutes of inactivity before auto-archiving: 60, 1440, 4320, or 10080. Default 1440 (24h)."),
+      auto_archive_duration: z
+        .union([z.literal(60), z.literal(1440), z.literal(4320), z.literal(10080)])
+        .default(1440)
+        .describe("Minutes of inactivity before auto-archiving: 60, 1440, 4320, or 10080. Default 1440 (24h)."),
     }),
     handle: async ({ channel_id, name, message_id, auto_archive_duration }) => {
       const channel = await getTextChannel(channel_id);
-      const duration = (auto_archive_duration ?? 1440) as 60 | 1440 | 4320 | 10080;
+      const duration = auto_archive_duration;
       if (message_id) {
         const msg = await channel.messages.fetch(message_id);
         const thread = await msg.startThread({ name, autoArchiveDuration: duration });
@@ -151,11 +153,11 @@ const tools = [
     annotations: { title: "Bulk delete messages", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to delete messages from."),
-      count: z.number().describe("Number of recent messages to delete (2–100)."),
+      count: intIn(2, MAX_FETCH_LIMIT).describe("Number of recent messages to delete (2–100)."),
     }),
     handle: async ({ channel_id, count }) => {
       const channel = await getTextChannel(channel_id);
-      const deleted = await channel.bulkDelete(clampInt(count, 2, 100, 2), true);
+      const deleted = await channel.bulkDelete(count, true);
       return { content: [{ type: "text", text: `✅ Deleted ${deleted.size} messages in #${channel.name}.` }] };
     },
   }),
@@ -252,18 +254,17 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to search."),
       keyword: z.string().describe("Case-insensitive substring to match within message content."),
-      limit: z.number().optional().describe("Max number of recent messages to scan (1–100). Default 100."),
+      limit: intIn(1, MAX_FETCH_LIMIT).default(MAX_FETCH_LIMIT).describe("Max number of recent messages to scan (1–100). Default 100."),
     }),
     handle: async ({ channel_id, keyword, limit }) => {
       const channel = await getTextChannel(channel_id);
-      const max = clampInt(limit, 1, MAX_FETCH_LIMIT, MAX_FETCH_LIMIT);
-      const messages = await channel.messages.fetch({ limit: max, cache: false });
+      const messages = await channel.messages.fetch({ limit, cache: false });
       const needle = keyword.toLowerCase();
       const matches = [...messages.values()]
         .filter((m) => m.content.toLowerCase().includes(needle))
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
         .map((m) => ({ id: m.id, author: m.author.tag, content: m.content, timestamp: m.createdAt.toISOString() }));
-      return { content: [{ type: "text", text: matches.length > 0 ? JSON.stringify(matches, null, 2) : `No messages found containing "${keyword}" in the last ${max} messages.` }] };
+      return { content: [{ type: "text", text: matches.length > 0 ? JSON.stringify(matches, null, 2) : `No messages found containing "${keyword}" in the last ${limit} messages.` }] };
     },
   }),
   defineTool({
@@ -319,14 +320,14 @@ const tools = [
       channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
       message_id: messageId.describe("ID of the message to inspect."),
       emoji: z.string().describe("Unicode emoji or custom emoji 'name:id' to list reactors for."),
-      limit: z.number().optional().describe("Max users to return (1–100). Default 25."),
+      limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.LIMIT).describe("Max users to return (1–100). Default 25."),
     }),
     handle: async ({ channel_id, message_id, emoji, limit }) => {
       const channel = await getTextChannel(channel_id);
       const msg = await channel.messages.fetch(message_id);
       const reaction = findReaction(msg, emoji);
       if (!reaction) throw new Error(`No reaction found for emoji "${emoji}" on message ${msg.id}.`);
-      const users = await reaction.users.fetch({ limit: clampInt(limit, 1, MAX_FETCH_LIMIT, DEFAULTS.LIMIT) });
+      const users = await reaction.users.fetch({ limit });
       const result = [...users.values()].map((u) => ({ id: u.id, username: u.username, bot: u.bot }));
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     },

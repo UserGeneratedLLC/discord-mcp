@@ -1,8 +1,8 @@
 import { GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel, GuildScheduledEventStatus, type GuildScheduledEventCreateOptions, type GuildScheduledEventEditOptions } from "discord.js";
 import { z } from "zod";
-import { discord, clampInt } from "../client.js";
+import { discord } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
-import { defineTool, defineModule, snowflake, guildId } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -200,20 +200,19 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
       event_id: snowflake.describe("ID (snowflake) of the scheduled event."),
-      limit: z.number().optional().describe("Max subscribers per page (1–100). Default 25."),
+      limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.LIMIT).describe("Max subscribers per page (1–100). Default 25."),
       after: snowflake.optional().describe("Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page."),
     }),
     handle: async ({ guild_id, event_id, limit, after }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const event = await guild.scheduledEvents.fetch(event_id);
-      const resolvedLimit = clampInt(limit, 1, MAX_FETCH_LIMIT, DEFAULTS.LIMIT);
-      const subscribers = await event.fetchSubscribers({ limit: resolvedLimit, after });
+      const subscribers = await event.fetchSubscribers({ limit, after });
       const list = [...subscribers.values()].map((sub) => ({
         user_id: sub.user.id,
         username: sub.user.username,
         avatar: sub.user.displayAvatarURL(),
       }));
-      const nextCursor = subscribers.size === resolvedLimit ? subscribers.lastKey() ?? null : null;
+      const nextCursor = subscribers.size === limit ? subscribers.lastKey() ?? null : null;
       return { content: [{ type: "text", text: JSON.stringify({ subscribers: list, nextCursor }, null, 2) }] };
     },
   }),
@@ -226,16 +225,16 @@ const tools = [
       guild_id: guildId,
       event_id: snowflake.describe("ID (snowflake) of the scheduled event to link the invite to."),
       channel_id: snowflake.optional().describe("Channel (snowflake) the invite points to. Defaults to the server's first text channel if omitted."),
-      max_age: z.number().optional().describe("Invite lifetime in seconds; 0 means it never expires. Default 86400 (24h)."),
-      max_uses: z.number().optional().describe("Maximum number of uses; 0 means unlimited. Default 0."),
+      max_age: intIn(0, 604800).default(86400).describe("Invite lifetime in seconds, 0–604800 (7 days); 0 means it never expires. Default 86400 (24h)."),
+      max_uses: intIn(0, 100).default(0).describe("Maximum number of uses, 0–100; 0 means unlimited. Default 0."),
     }),
     handle: async ({ guild_id, event_id, channel_id, max_age, max_uses }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const event = await guild.scheduledEvents.fetch(event_id);
       const url = await event.createInviteURL({
         channel: channel_id,
-        maxAge: max_age ?? 86400,
-        maxUses: max_uses ?? 0,
+        maxAge: max_age,
+        maxUses: max_uses,
       });
       return { content: [{ type: "text", text: `✅ Event invite created: ${url}` }] };
     },

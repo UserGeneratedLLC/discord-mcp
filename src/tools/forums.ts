@@ -1,7 +1,7 @@
 import { ChannelType, ForumChannel, ThreadChannel } from "discord.js";
 import { z } from "zod";
-import { discord, clampInt } from "../client.js";
-import { defineTool, defineModule, snowflake, guildId } from "./define.js";
+import { discord } from "../client.js";
+import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
 
 const threadId = snowflake.describe("ID (snowflake) of the forum post (thread).");
 
@@ -99,12 +99,11 @@ const tools = [
     annotations: { title: "Get forum post", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       thread_id: threadId.describe("ID (snowflake) of the forum post (thread)."),
-      limit: z.number().optional().describe("How many recent messages to include (1–100). Default 20."),
+      limit: intIn(1, 100).default(20).describe("How many recent messages to include (1–100). Default 20."),
     }),
     handle: async ({ thread_id, limit }) => {
       const thread = await getThreadChannel(thread_id);
-      const max = clampInt(limit, 1, 100, 20);
-      const messages = await thread.messages.fetch({ limit: max });
+      const messages = await thread.messages.fetch({ limit });
       const result = {
         id: thread.id,
         name: thread.name,
@@ -132,19 +131,18 @@ const tools = [
     annotations: { title: "List forum threads", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       forum_channel_id: snowflake.describe("ID (snowflake) of the forum channel to list posts from."),
-      limit: z.number().optional().describe("Max archived posts per page (1–100). Default 100."),
+      limit: intIn(1, 100).default(100).describe("Max archived posts per page (1–100). Default 100."),
       before: z.string().optional().describe("Pagination cursor: an ISO timestamp. Pass the previous response's nextBefore to fetch older archived posts. When set, active posts are omitted."),
     }),
     handle: async ({ forum_channel_id, limit, before }) => {
       const forum = await getForumChannel(forum_channel_id);
-      const max = clampInt(limit, 1, 100, 100);
       const beforeDate = before !== undefined ? new Date(before) : undefined;
       const collected: ThreadChannel[] = [];
       if (beforeDate === undefined) {
         const active = await forum.threads.fetchActive();
         collected.push(...active.threads.values());
       }
-      const archived = await forum.threads.fetchArchived({ limit: max, before: beforeDate });
+      const archived = await forum.threads.fetchArchived({ limit, before: beforeDate });
       collected.push(...archived.threads.values());
       const threads = collected.map((t) => ({
         id: t.id,

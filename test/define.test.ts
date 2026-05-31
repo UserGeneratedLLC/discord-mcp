@@ -38,3 +38,19 @@ test("handle rejects invalid args before reaching the Discord API", async () => 
 test("handle returns null for a tool it does not own", async () => {
   assert.equal(await messages.handle("discord_not_a_messages_tool", {}), null);
 });
+
+test("bounded integer fields advertise integer + min/max + default in the inputSchema", () => {
+  const read = messages.definitions.find((d) => d.name === "discord_read_messages");
+  const limit = (read!.inputSchema as { properties: Record<string, Record<string, unknown>> }).properties.limit;
+  assert.equal(limit.type, "integer");
+  assert.equal(limit.minimum, 1);
+  assert.equal(limit.maximum, 100);
+  assert.equal(limit.default, 20);
+});
+
+test("handle rejects out-of-range and non-integer numbers before reaching the Discord API", async () => {
+  // Valid channel_id, but the bound/integer check on limit fails synchronously with no network call.
+  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 500 }), ZodError);
+  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 0 }), ZodError);
+  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 3.7 }), ZodError);
+});

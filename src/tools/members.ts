@@ -1,8 +1,8 @@
 import { GuildMember } from "discord.js";
 import { z } from "zod";
-import { discord, serializePermissions, clampInt, validateInt } from "../client.js";
+import { discord, serializePermissions } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
-import { defineTool, defineModule, snowflake, guildId } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
 
 /** Tool definitions for listing, inspecting, and moderating guild members. */
 const tools = [
@@ -13,19 +13,18 @@ const tools = [
     annotations: { title: "List members", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,
-      limit: z.number().optional().describe("How many members per page (1–1000). Default 50."),
+      limit: intIn(1, DEFAULTS.MEMBERS_MAX).default(DEFAULTS.MEMBERS).describe("How many members per page (1–1000). Default 50."),
       after: snowflake.optional().describe("Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page."),
     }),
     handle: async ({ guild_id, limit, after }) => {
       const guild = await discord.guilds.fetch(guild_id);
-      const max = clampInt(limit, 1, DEFAULTS.MEMBERS_MAX, DEFAULTS.MEMBERS);
-      const members = await guild.members.list({ limit: max, after });
+      const members = await guild.members.list({ limit, after });
       const result = [...members.values()].map((m: GuildMember) => ({
         id: m.id, username: m.user.tag, nickname: m.nickname,
         roles: m.roles.cache.filter((r) => r.name !== "@everyone").map((r) => ({ id: r.id, name: r.name })),
         joinedAt: m.joinedAt?.toISOString(),
       }));
-      const nextCursor = members.size === max ? members.lastKey() ?? null : null;
+      const nextCursor = members.size === limit ? members.lastKey() ?? null : null;
       return { content: [{ type: "text", text: JSON.stringify({ members: result, nextCursor }, null, 2) }] };
     },
   }),
@@ -80,14 +79,13 @@ const tools = [
       guild_id: guildId,
       user_id: snowflake.describe("Discord user ID (snowflake) of the user to ban."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
-      delete_message_days: z.number().optional().describe("Also delete the user's messages from the last N days (0–7). Default 0 (delete nothing)."),
+      delete_message_days: intIn(0, 7).default(0).describe("Also delete the user's messages from the last N days (0–7). Default 0 (delete nothing)."),
     }),
     handle: async ({ guild_id, user_id, reason, delete_message_days }) => {
       const guild = await discord.guilds.fetch(guild_id);
-      const deleteDays = clampInt(delete_message_days, 0, 7, 0);
       await guild.members.ban(user_id, {
         reason,
-        deleteMessageSeconds: deleteDays * 86400,
+        deleteMessageSeconds: delete_message_days * 86400,
       });
       return { content: [{ type: "text", text: `✅ User ${user_id} has been banned.` }] };
     },
@@ -116,19 +114,18 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
       user_id: snowflake.describe("Discord user ID (snowflake) of the member to time out."),
-      duration_minutes: z.number().describe("Timeout length in minutes (1–40320, i.e. up to 28 days). Use 0 to clear an existing timeout."),
+      duration_minutes: intIn(0, 40320).describe("Timeout length in minutes (0–40320, i.e. up to 28 days). Use 0 to clear an existing timeout."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
     handle: async ({ guild_id, user_id, duration_minutes, reason }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const member = await guild.members.fetch(user_id);
-      const duration = validateInt(duration_minutes, 0, 40320, "duration_minutes");
-      const until = duration > 0 ? new Date(Date.now() + duration * 60 * 1000) : null;
+      const until = duration_minutes > 0 ? new Date(Date.now() + duration_minutes * 60 * 1000) : null;
       await member.disableCommunicationUntil(until, reason);
       return {
         content: [{
           type: "text",
-          text: duration > 0 ? `✅ ${member.user.tag} is in timeout for ${duration} minutes.` : `✅ Timeout removed from ${member.user.tag}.`,
+          text: duration_minutes > 0 ? `✅ ${member.user.tag} is in timeout for ${duration_minutes} minutes.` : `✅ Timeout removed from ${member.user.tag}.`,
         }],
       };
     },
@@ -141,12 +138,11 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
       query: z.string().describe("Prefix to match against usernames and nicknames."),
-      limit: z.number().optional().describe("Max members to return (1–100). Default 25."),
+      limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.LIMIT).describe("Max members to return (1–100). Default 25."),
     }),
     handle: async ({ guild_id, query, limit }) => {
       const guild = await discord.guilds.fetch(guild_id);
-      const max = clampInt(limit, 1, MAX_FETCH_LIMIT, DEFAULTS.LIMIT);
-      const members = await guild.members.search({ query, limit: max });
+      const members = await guild.members.search({ query, limit });
       const result = [...members.values()].map((m: GuildMember) => ({
         id: m.id, username: m.user.tag, nickname: m.nickname,
         roles: m.roles.cache.filter((r) => r.name !== "@everyone").map((r) => ({ id: r.id, name: r.name })),
@@ -180,17 +176,16 @@ const tools = [
     annotations: { title: "List bans", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,
-      limit: z.number().optional().describe("Max bans per page (1–1000). Default 1000."),
+      limit: intIn(1, DEFAULTS.MEMBERS_MAX).default(DEFAULTS.MEMBERS_MAX).describe("Max bans per page (1–1000). Default 1000."),
       after: snowflake.optional().describe("Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page."),
     }),
     handle: async ({ guild_id, limit, after }) => {
       const guild = await discord.guilds.fetch(guild_id);
-      const max = clampInt(limit, 1, 1000, 1000);
-      const bans = await guild.bans.fetch({ limit: max, after, cache: false });
+      const bans = await guild.bans.fetch({ limit, after, cache: false });
       const result = [...bans.values()].map((ban) => ({
         user_id: ban.user.id, username: ban.user.tag, reason: ban.reason ?? null,
       }));
-      const nextCursor = bans.size === max ? bans.lastKey() ?? null : null;
+      const nextCursor = bans.size === limit ? bans.lastKey() ?? null : null;
       return { content: [{ type: "text", text: JSON.stringify({ bans: result, nextCursor }, null, 2) }] };
     },
   }),
@@ -202,7 +197,7 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
       user_ids: z.array(snowflake).describe("Array of user IDs (snowflakes) to ban."),
-      delete_message_seconds: z.number().optional().describe("Also delete each user's messages from the last N seconds (0–604800, i.e. up to 7 days). Default 0."),
+      delete_message_seconds: intIn(0, 604800).default(0).describe("Also delete each user's messages from the last N seconds (0–604800, i.e. up to 7 days). Default 0."),
       dry_run: z.boolean().optional().describe("If true (default), only returns the user IDs that would be banned without banning anyone. Set false to actually ban."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
@@ -213,7 +208,7 @@ const tools = [
         return { content: [{ type: "text", text: `🔍 Dry run: ${user_ids.length} users would be banned:\n${JSON.stringify(user_ids, null, 2)}` }] };
       }
       const result = await guild.members.bulkBan(user_ids, {
-        deleteMessageSeconds: clampInt(delete_message_seconds, 0, 604800, 0),
+        deleteMessageSeconds: delete_message_seconds,
         reason,
       });
       return { content: [{ type: "text", text: `✅ Bulk ban complete: ${result.bannedUsers.length} banned, ${result.failedUsers.length} failed.` }] };
@@ -226,22 +221,21 @@ const tools = [
     annotations: { title: "Prune inactive members", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,
-      days: z.number().describe("Inactivity threshold in days (1–30)."),
+      days: intIn(1, 30).describe("Inactivity threshold in days (1–30)."),
       roles: z.array(snowflake).optional().describe("Optional role IDs (snowflakes) to include; by default only members with no roles are counted."),
       dry_run: z.boolean().optional().describe("If true (default), only returns the count that would be pruned without removing anyone. Set false to actually prune."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
     handle: async ({ guild_id, days, roles, dry_run, reason }) => {
       const guild = await discord.guilds.fetch(guild_id);
-      const d = validateInt(days, 1, 30, "days");
       const dryRun = dry_run !== false;
       const pruned = await guild.members.prune({
-        days: d,
+        days,
         dry: dryRun,
         roles: roles ?? undefined,
         reason,
       });
-      return { content: [{ type: "text", text: dryRun ? `🔍 Dry run: ${pruned} members would be pruned (${d} days inactive).` : `✅ ${pruned} members pruned (${d} days inactive).` }] };
+      return { content: [{ type: "text", text: dryRun ? `🔍 Dry run: ${pruned} members would be pruned (${days} days inactive).` : `✅ ${pruned} members pruned (${days} days inactive).` }] };
     },
   }),
 ];

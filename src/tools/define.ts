@@ -10,6 +10,14 @@ export const snowflake = z
 export const guildId = snowflake.describe("Discord server (guild) ID (snowflake).");
 
 /**
+ * A bounded integer field: rejects non-integers and out-of-range values at parse
+ * time and emits `type: "integer"` + `minimum`/`maximum` into the JSON Schema, so
+ * the advertised input contract matches what the handler actually accepts. Append
+ * `.default(n)` for an optional field with a default, or `.optional()` for one with none.
+ */
+export const intIn = (min: number, max: number) => z.int().min(min).max(max);
+
+/**
  * Converts a zod schema into the JSON Schema shape MCP sends over the wire.
  * `io: "input"` emits the input view (so `.default()`s stay optional); the `$schema`
  * key zod adds is stripped because MCP `inputSchema` is a bare object schema.

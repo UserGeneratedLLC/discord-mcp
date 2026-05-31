@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { discord } from "../client.js";
-import { defineTool, defineModule, snowflake, guildId } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -61,8 +61,8 @@ const tools = [
     annotations: { title: "Create invite", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel the invite leads to."),
-      max_age: z.number().optional().describe("Invite lifetime in seconds; 0 means it never expires. Default 86400 (24h)."),
-      max_uses: z.number().optional().describe("Maximum number of uses; 0 means unlimited. Default 0."),
+      max_age: intIn(0, 604800).default(86400).describe("Invite lifetime in seconds, 0–604800 (7 days); 0 means it never expires. Default 86400 (24h)."),
+      max_uses: intIn(0, 100).default(0).describe("Maximum number of uses, 0–100; 0 means unlimited. Default 0."),
       unique: z.boolean().optional().describe("If true, always mint a fresh invite instead of reusing an equivalent existing one. Default false."),
       temporary: z.boolean().optional().describe("If true, members who join via this invite are removed when they disconnect (unless they get a role). Default false."),
     }),
@@ -72,10 +72,10 @@ const tools = [
         throw new Error(`Channel ${channel_id} does not support invites.`);
       }
       const invite = await (channel as any).createInvite({
-        maxAge: Number(max_age ?? 86400),
-        maxUses: Number(max_uses ?? 0),
-        unique: Boolean(unique ?? false),
-        temporary: Boolean(temporary ?? false),
+        maxAge: max_age,
+        maxUses: max_uses,
+        unique: unique ?? false,
+        temporary: temporary ?? false,
       });
       return {
         content: [{ type: "text", text: `✅ Invite created: ${invite.url} (code: ${invite.code}, max_age: ${invite.maxAge}s, max_uses: ${invite.maxUses}).` }],

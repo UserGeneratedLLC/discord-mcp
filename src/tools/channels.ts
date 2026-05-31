@@ -1,7 +1,7 @@
 import { ChannelType, NewsChannel } from "discord.js";
 import { z } from "zod";
 import { discord, getGuildChannel } from "../client.js";
-import { defineTool, defineModule, snowflake, guildId } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
 
 /** Tool definitions for creating, deleting, editing, moving, and cloning channels. */
 const tools = [
@@ -57,7 +57,7 @@ const tools = [
       channel_id: snowflake.describe("ID (snowflake) of the channel to edit."),
       name: z.string().optional().describe("New channel name (max 100 characters)."),
       topic: z.string().optional().describe("New topic/description (text channels only)."),
-      slowmode: z.number().optional().describe("Per-user message cooldown in seconds, 0–21600. 0 disables slowmode."),
+      slowmode: intIn(0, 21600).optional().describe("Per-user message cooldown in seconds, 0–21600. 0 disables slowmode."),
       nsfw: z.boolean().optional().describe("Mark (true) or unmark (false) the channel as age-restricted (NSFW)."),
     }),
     handle: async ({ channel_id, name, topic, slowmode, nsfw }) => {
@@ -108,7 +108,7 @@ const tools = [
     annotations: { title: "Set channel position", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel to reposition."),
-      position: z.number().describe("Zero-based position within the category (0 = top)."),
+      position: z.int().min(0).describe("Zero-based position within the category (0 = top)."),
     }),
     handle: async ({ channel_id, position }) => {
       const channel = await getGuildChannel(channel_id);

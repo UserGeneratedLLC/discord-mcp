@@ -193,7 +193,7 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
       role_id: snowflake.describe("ID (snowflake) of the role to reposition."),
-      position: z.number().describe("New hierarchy position (0 = lowest, just above @everyone). Higher numbers rank higher."),
+      position: z.int().min(0).describe("New hierarchy position (0 = lowest, just above @everyone). Higher numbers rank higher."),
     }),
     handle: async ({ guild_id, role_id, position }) => {
       const guild = await discord.guilds.fetch(guild_id);
