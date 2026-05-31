@@ -1,10 +1,58 @@
 import { EmbedBuilder, ColorResolvable } from "discord.js";
+import { z } from "zod";
+
+/**
+ * Zod fields of a rich embed — spread into a tool's `z.object({...})` schema.
+ * The zod source of truth for embeds; {@link EMBED_FIELD_PROPS} is the legacy JSON
+ * mirror still consumed by the not-yet-migrated DM/webhook tools and goes away once
+ * those modules adopt this shape.
+ */
+export const embedFieldsShape = {
+  title: z.string().optional().describe("Embed title shown in bold at the top."),
+  url: z.string().optional().describe("URL that makes the title clickable."),
+  description: z.string().optional().describe("Main body text of the embed (supports Markdown)."),
+  color: z.string().optional().describe("Side-bar color as a hex string, e.g. '#5865F2'."),
+  fields: z
+    .array(
+      z.object({
+        name: z.string().describe("Field heading."),
+        value: z.string().describe("Field body text."),
+        inline: z
+          .boolean()
+          .optional()
+          .describe("If true, render this field side-by-side with adjacent inline fields."),
+      })
+    )
+    .optional()
+    .describe(
+      "Up to 25 name/value field blocks. Set inline:true on a field to render it side-by-side with adjacent inline fields (up to 3 per row)."
+    ),
+  author: z
+    .object({
+      name: z.string().describe("Author display name."),
+      icon_url: z.string().optional().describe("Small icon shown next to the author name."),
+      url: z.string().optional().describe("URL the author name links to."),
+    })
+    .optional()
+    .describe("Author block shown at the top of the embed."),
+  thumbnail_url: z.string().optional().describe("Small image shown in the top-right corner."),
+  footer: z.string().optional().describe("Footer text shown at the bottom of the embed."),
+  image_url: z.string().optional().describe("Large image shown below the embed body."),
+  timestamp: z.boolean().optional().describe("If true, stamp the embed with the current time."),
+} as const;
+
+/** Schema for a single embed object (e.g. an item of `discord_send_multiple_embeds`). */
+export const embedObjectSchema = z.object(embedFieldsShape);
+
+/** Validated embed input — the typed shape `buildEmbed` consumes from migrated tools. */
+export type EmbedInput = z.infer<typeof embedObjectSchema>;
 
 /**
  * Builds an EmbedBuilder from a flat args object.
- * Shared by the message, DM, and webhook embed tools.
+ * Shared by the message, DM, and webhook embed tools. The union param accepts both
+ * a validated {@link EmbedInput} (migrated tools) and a raw bag (legacy callers).
  */
-export function buildEmbed(args: Record<string, unknown>): EmbedBuilder {
+export function buildEmbed(args: EmbedInput | Record<string, unknown>): EmbedBuilder {
   const embed = new EmbedBuilder();
   if (args.title) embed.setTitle(args.title as string);
   if (args.url) embed.setURL(args.url as string);

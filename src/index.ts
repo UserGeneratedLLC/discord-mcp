@@ -14,6 +14,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { DiscordAPIError } from "discord.js";
+import { ZodError } from "zod";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { ensureConnected, discord } from "./client.js";
@@ -34,6 +35,15 @@ const DISCORD_ERROR_HINTS: Record<number, string> = {
 
 /** Formats an error for the MCP client, surfacing DiscordAPIError code/status and an actionable hint. */
 function formatToolError(err: unknown): string {
+  if (err instanceof ZodError) {
+    const detail = err.issues
+      .map((i) => {
+        const path = i.path.join(".");
+        return path ? `${path}: ${i.message}` : i.message;
+      })
+      .join("; ");
+    return `Invalid arguments — ${detail}`;
+  }
   if (err instanceof DiscordAPIError) {
     const code = Number(err.code);
     const hint = DISCORD_ERROR_HINTS[code];
