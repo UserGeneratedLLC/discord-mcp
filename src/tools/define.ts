@@ -6,6 +6,9 @@ export const snowflake = z
   .string()
   .regex(/^\d{17,20}$/, "Must be a Discord snowflake ID (17-20 digits).");
 
+/** The `guild_id` field, identical across nearly every guild-scoped tool. */
+export const guildId = snowflake.describe("Discord server (guild) ID (snowflake).");
+
 /**
  * Converts a zod schema into the JSON Schema shape MCP sends over the wire.
  * `io: "input"` emits the input view (so `.default()`s stay optional); the `$schema`
