@@ -130,35 +130,6 @@ export function validateId(value: unknown, label: string): string {
 }
 
 /**
- * Coerces a value to an integer clamped to [min, max], using fallback when it is not a finite number.
- * @param value - The raw value to coerce.
- * @param min - Lower bound (inclusive).
- * @param max - Upper bound (inclusive).
- * @param fallback - Returned when value is missing or non-numeric.
- */
-export function clampInt(value: unknown, min: number, max: number, fallback: number): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(Math.max(Math.trunc(n), min), max);
-}
-
-/**
- * Validates a value is a finite integer within [min, max].
- * @param value - The raw value to validate.
- * @param min - Lower bound (inclusive).
- * @param max - Upper bound (inclusive).
- * @param label - Human-readable label used in the error message.
- * @throws {Error} If the value is not an integer in range.
- */
-export function validateInt(value: unknown, min: number, max: number, label: string): number {
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < min || n > max) {
-    throw new Error(`Invalid ${label}: "${String(value)}". Must be an integer between ${min} and ${max}.`);
-  }
-  return n;
-}
-
-/**
  * Converts a PermissionsBitField into a human-readable array of permission names.
  * @param perms - The bitfield to serialize.
  * @returns Array of permission flag names (e.g. ["SendMessages", "ViewChannel"]).
