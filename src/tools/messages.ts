@@ -287,7 +287,7 @@ const tools = [
     name: "discord_remove_reactions",
     description:
       "Remove reactions from a message. With no emoji: removes ALL reactions. With emoji only: removes every reaction of that emoji. With emoji and user_id: removes that one user's reaction. Removing all reactions or another user's reaction requires the Manage Messages permission. Use discord_add_reaction to add.",
-    annotations: { title: "Remove reactions", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { title: "Remove reactions", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
       message_id: messageId.describe("ID of the message to remove reactions from."),

@@ -97,7 +97,7 @@ const tools = [
     name: "discord_copy_permissions",
     description:
       "Replace the target channel's permission overwrites with a copy of the source channel's. The target's existing overwrites are overwritten. Requires the Manage Roles permission. Returns a confirmation.",
-    annotations: { title: "Copy channel permissions", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { title: "Copy channel permissions", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     schema: z.object({
       source_channel_id: snowflake.describe("ID (snowflake) of the channel to copy overwrites from."),
       target_channel_id: snowflake.describe("ID (snowflake) of the channel whose overwrites will be replaced."),
