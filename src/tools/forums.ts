@@ -211,7 +211,7 @@ const tools = [
     name: "discord_set_forum_tags",
     description:
       "Replace the full set of available tags on a forum channel with the provided list. This overwrites existing tags, so include every tag you want to keep. Requires the Manage Channels permission. Returns a confirmation.",
-    annotations: { title: "Set forum tags", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: { title: "Set forum tags", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     schema: z.object({
       forum_channel_id: snowflake.describe("ID (snowflake) of the forum channel to set tags on."),
       tags: z.array(z.object({
