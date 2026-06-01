@@ -2,11 +2,19 @@ import { WebhookClient } from "discord.js";
 import { z } from "zod";
 import { discord } from "../client.js";
 import { buildEmbed, embedObjectSchema } from "../embeds.js";
-import { defineTool, defineModule, snowflake, guildId } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, structured } from "./define.js";
 
 const webhookId = snowflake.describe("ID (snowflake) of the webhook.");
 const webhookToken = z.string().describe("Secret token of the webhook.");
 const messageId = snowflake.describe("ID of the webhook message.");
+
+const webhookSummary = z.object({
+  id: z.string(),
+  name: z.string().nullable(),
+  channel_id: z.string(),
+  token: z.string().nullable(),
+  creator: z.string().nullable(),
+});
 
 /** Tool definitions for creating, sending via, editing, deleting, and listing webhooks. */
 const tools = [
@@ -116,6 +124,7 @@ const tools = [
       channel_id: snowflake.optional().describe("ID (snowflake) of a channel to list webhooks for. Mutually exclusive with guild_id."),
       guild_id: guildId.optional().describe("Discord server (guild) ID (snowflake) to list all webhooks for. Mutually exclusive with channel_id."),
     }),
+    outputSchema: z.object({ webhooks: z.array(webhookSummary) }),
     handle: async ({ channel_id, guild_id }) => {
       if (channel_id) {
         const channel = await discord.channels.fetch(channel_id);
@@ -128,7 +137,7 @@ const tools = [
           token: w.token ?? null,
           creator: w.owner && "tag" in w.owner ? w.owner.tag : (w.owner?.username ?? null),
         }));
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return structured({ webhooks: result });
       } else if (guild_id) {
         const guild = await discord.guilds.fetch(guild_id);
         const webhooks = await guild.fetchWebhooks();
@@ -139,7 +148,7 @@ const tools = [
           token: w.token ?? null,
           creator: w.owner && "tag" in w.owner ? w.owner.tag : (w.owner?.username ?? null),
         }));
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return structured({ webhooks: result });
       } else {
         throw new Error("Either channel_id or guild_id is required.");
       }
@@ -205,15 +214,21 @@ const tools = [
       webhook_token: webhookToken.describe("Secret token of the webhook."),
       message_id: messageId.describe("ID of the webhook message to fetch."),
     }),
+    outputSchema: z.object({
+      id: z.string(),
+      content: z.string(),
+      embeds: z.number(),
+      timestamp: z.number(),
+    }),
     handle: async ({ webhook_id, webhook_token, message_id }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         const msg = await client.fetchMessage(message_id);
-        return { content: [{ type: "text", text: JSON.stringify({
+        return structured({
           id: msg.id, content: msg.content, embeds: msg.embeds.length,
           timestamp: msg.timestamp,
-        }, null, 2) }] };
+        });
       } finally {
         client.destroy();
       }

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { discord } from "../client.js";
 import { buildEmbed, embedFieldsShape } from "../embeds.js";
-import { defineTool, defineModule, snowflake, intIn } from "./define.js";
+import { defineTool, defineModule, snowflake, intIn, structured } from "./define.js";
 
 const userId = snowflake.describe("Discord user ID (snowflake) of the DM recipient.");
 const messageId = snowflake.describe("ID of the target message within the DM conversation.");
@@ -111,6 +111,17 @@ const tools = [
       user_id: userId,
       limit: intIn(1, 100).default(20).describe("How many recent messages to fetch (1–100). Default 20."),
     }),
+    outputSchema: z.object({
+      messages: z.array(
+        z.object({
+          id: z.string(),
+          author: z.string(),
+          content: z.string(),
+          embeds: z.number(),
+          timestamp: z.string(),
+        }),
+      ),
+    }),
     handle: async ({ user_id, limit }) => {
       const user = await discord.users.fetch(user_id);
       const dm = await user.createDM();
@@ -124,7 +135,7 @@ const tools = [
           embeds: m.embeds.length,
           timestamp: m.createdAt.toISOString(),
         }));
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return structured({ messages: result });
     },
   }),
   defineTool({

@@ -1,7 +1,20 @@
 import { ChannelType, CategoryChannel, GuildChannel } from "discord.js";
 import { z } from "zod";
 import { discord } from "../client.js";
-import { defineTool, defineModule, guildId } from "./define.js";
+import { defineTool, defineModule, guildId, structured } from "./define.js";
+
+const guildSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  memberCount: z.number(),
+  icon: z.string().nullable(),
+});
+
+const channelSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+});
 
 /** Tool definitions for server/guild discovery and channel navigation. */
 const tools = [
@@ -11,11 +24,12 @@ const tools = [
       "List every Discord server (guild) the bot is a member of (id, name, member count, icon). Takes no arguments. Read-only. Start here to discover the guild_id needed by most other tools.",
     annotations: { title: "List servers", readOnlyHint: true, openWorldHint: true },
     schema: z.object({}),
+    outputSchema: z.object({ guilds: z.array(guildSummary) }),
     handle: async () => {
       const guilds = discord.guilds.cache.map((g) => ({
         id: g.id, name: g.name, memberCount: g.memberCount, icon: g.iconURL(),
       }));
-      return { content: [{ type: "text", text: JSON.stringify(guilds, null, 2) }] };
+      return structured({ guilds });
     },
   }),
   defineTool({
@@ -26,18 +40,26 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
     }),
+    outputSchema: z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string().nullable(),
+      memberCount: z.number(),
+      channelCount: z.number(),
+      roleCount: z.number(),
+      boostLevel: z.number(),
+      boostCount: z.number().nullable(),
+      createdAt: z.string(),
+      owner: z.string(),
+    }),
     handle: async ({ guild_id }) => {
       const guild = await (await discord.guilds.fetch(guild_id)).fetch();
-      return {
-        content: [{
-          type: "text", text: JSON.stringify({
-            id: guild.id, name: guild.name, description: guild.description,
-            memberCount: guild.memberCount, channelCount: guild.channels.cache.size,
-            roleCount: guild.roles.cache.size, boostLevel: guild.premiumTier,
-            boostCount: guild.premiumSubscriptionCount, createdAt: guild.createdAt, owner: guild.ownerId,
-          }, null, 2),
-        }],
-      };
+      return structured({
+        id: guild.id, name: guild.name, description: guild.description,
+        memberCount: guild.memberCount, channelCount: guild.channels.cache.size,
+        roleCount: guild.roles.cache.size, boostLevel: guild.premiumTier,
+        boostCount: guild.premiumSubscriptionCount, createdAt: guild.createdAt.toISOString(), owner: guild.ownerId,
+      });
     },
   }),
   defineTool({
@@ -48,6 +70,7 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
     }),
+    outputSchema: z.object({}).catchall(z.array(channelSummary)),
     handle: async ({ guild_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       await guild.channels.fetch();
@@ -68,7 +91,7 @@ const tools = [
           result[parentName].push(entry);
         });
 
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return structured(result);
     },
   }),
   defineTool({
@@ -80,6 +103,7 @@ const tools = [
       guild_id: guildId,
       name: z.string().describe("Case-insensitive substring to match against channel names."),
     }),
+    outputSchema: z.object({ matches: z.array(channelSummary) }),
     handle: async ({ guild_id, name }) => {
       const guild = await discord.guilds.fetch(guild_id);
       await guild.channels.fetch();
@@ -87,7 +111,7 @@ const tools = [
       const matches = guild.channels.cache
         .filter((c) => c.name.toLowerCase().includes(keyword))
         .map((c) => ({ id: c.id, name: c.name, type: ChannelType[c.type] }));
-      return { content: [{ type: "text", text: JSON.stringify(matches, null, 2) }] };
+      return structured({ matches });
     },
   }),
 ];

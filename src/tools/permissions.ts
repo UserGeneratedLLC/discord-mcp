@@ -1,7 +1,7 @@
 import { PermissionOverwriteOptions, GuildChannel } from "discord.js";
 import { z } from "zod";
 import { discord, getGuildChannel, serializePermissions } from "../client.js";
-import { defineTool, defineModule, snowflake, guildId } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, structured } from "./define.js";
 
 /**
  * Parses a permission array from tool arguments.
@@ -15,6 +15,20 @@ function parsePermArray(value: string[] | string | undefined): string[] {
 
 const permFlags = z.union([z.array(z.string()), z.string()]).optional();
 
+const channelOverwriteSummary = z.object({
+  id: z.string(),
+  type: z.string(),
+  allow: z.array(z.string()),
+  deny: z.array(z.string()),
+});
+
+const auditOverwriteSummary = z.object({
+  entity: z.string(),
+  type: z.string(),
+  allow: z.array(z.string()),
+  deny: z.array(z.string()),
+});
+
 /** Tool definitions for viewing and managing per-channel permission overwrites. */
 const tools = [
   defineTool({
@@ -25,6 +39,9 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel to inspect."),
     }),
+    outputSchema: z.object({
+      overwrites: z.array(channelOverwriteSummary),
+    }),
     handle: async ({ channel_id }) => {
       const channel = await getGuildChannel(channel_id);
       const overwrites = channel.permissionOverwrites.cache.map((ow) => ({
@@ -33,7 +50,7 @@ const tools = [
         allow: serializePermissions(ow.allow),
         deny: serializePermissions(ow.deny),
       }));
-      return { content: [{ type: "text", text: JSON.stringify(overwrites, null, 2) }] };
+      return structured({ overwrites });
     },
   }),
   defineTool({
@@ -121,6 +138,13 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
     }),
+    outputSchema: z.object({
+      channels: z.array(z.object({
+        channel: z.string(),
+        channelId: z.string(),
+        overwrites: z.array(auditOverwriteSummary),
+      })),
+    }),
     handle: async ({ guild_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       await guild.channels.fetch();
@@ -148,7 +172,7 @@ const tools = [
           });
           if (overwrites.length > 0) report.push({ channel: gch.name, channelId: gch.id, overwrites });
         });
-      return { content: [{ type: "text", text: JSON.stringify(report, null, 2) }] };
+      return structured({ channels: report });
     },
   }),
 ];

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { discord } from "../client.js";
-import { defineTool, defineModule, guildId } from "./define.js";
+import { defineTool, defineModule, guildId, structured } from "./define.js";
 
 /** Tool definitions for reading and updating the guild membership screening form. */
 const tools = [
@@ -12,9 +12,22 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
     }),
+    outputSchema: z.object({
+      version: z.string().nullable(),
+      form_fields: z.array(
+        z.object({
+          field_type: z.string(),
+          label: z.string(),
+          values: z.array(z.string()).nullable(),
+          required: z.boolean(),
+          description: z.string().nullable(),
+        })
+      ),
+      description: z.string().nullable(),
+    }),
     handle: async ({ guild_id }) => {
-      const data = await discord.rest.get(`/guilds/${guild_id}/member-verification`);
-      return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }] };
+      const data = await discord.rest.get(`/guilds/${guild_id}/member-verification`) as Record<string, unknown>;
+      return structured(data);
     },
   }),
   defineTool({

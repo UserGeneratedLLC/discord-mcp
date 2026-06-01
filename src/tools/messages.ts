@@ -10,10 +10,17 @@ import { z } from "zod";
 import { discord, getTextChannel } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
 import { buildEmbed, embedFieldsShape, embedObjectSchema } from "../embeds.js";
-import { defineModule, defineTool, snowflake, intIn } from "./define.js";
+import { defineModule, defineTool, snowflake, intIn, structured } from "./define.js";
 
 const channelId = snowflake.describe("ID (snowflake) of the channel or thread.");
 const messageId = snowflake.describe("ID of the message.");
+
+const messageSummary = z.object({
+  id: z.string(),
+  author: z.string(),
+  content: z.string(),
+  timestamp: z.string(),
+});
 
 /**
  * Looks up a reaction on a message by emoji argument.
@@ -38,6 +45,9 @@ const tools = [
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to read from."),
       limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.MESSAGES).describe("How many recent messages to fetch (1–100). Default 20."),
     }),
+    outputSchema: z.object({
+      messages: z.array(messageSummary.extend({ attachments: z.number(), pinned: z.boolean() })),
+    }),
     handle: async ({ channel_id, limit }) => {
       const channel = await getTextChannel(channel_id);
       const messages = await channel.messages.fetch({ limit, cache: false });
@@ -47,7 +57,7 @@ const tools = [
           id: m.id, author: m.author.tag, content: m.content,
           timestamp: m.createdAt.toISOString(), attachments: m.attachments.size, pinned: m.pinned,
         }));
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return structured({ messages: result });
     },
   }),
   defineTool({
@@ -256,6 +266,7 @@ const tools = [
       keyword: z.string().describe("Case-insensitive substring to match within message content."),
       limit: intIn(1, MAX_FETCH_LIMIT).default(MAX_FETCH_LIMIT).describe("Max number of recent messages to scan (1–100). Default 100."),
     }),
+    outputSchema: z.object({ matches: z.array(messageSummary) }),
     handle: async ({ channel_id, keyword, limit }) => {
       const channel = await getTextChannel(channel_id);
       const messages = await channel.messages.fetch({ limit, cache: false });
@@ -264,7 +275,7 @@ const tools = [
         .filter((m) => m.content.toLowerCase().includes(needle))
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
         .map((m) => ({ id: m.id, author: m.author.tag, content: m.content, timestamp: m.createdAt.toISOString() }));
-      return { content: [{ type: "text", text: matches.length > 0 ? JSON.stringify(matches, null, 2) : `No messages found containing "${keyword}" in the last ${limit} messages.` }] };
+      return structured({ matches });
     },
   }),
   defineTool({
@@ -322,6 +333,13 @@ const tools = [
       emoji: z.string().describe("Unicode emoji or custom emoji 'name:id' to list reactors for."),
       limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.LIMIT).describe("Max users to return (1–100). Default 25."),
     }),
+    outputSchema: z.object({
+      reactions: z.array(z.object({
+        id: z.string(),
+        username: z.string(),
+        bot: z.boolean(),
+      })),
+    }),
     handle: async ({ channel_id, message_id, emoji, limit }) => {
       const channel = await getTextChannel(channel_id);
       const msg = await channel.messages.fetch(message_id);
@@ -329,7 +347,7 @@ const tools = [
       if (!reaction) throw new Error(`No reaction found for emoji "${emoji}" on message ${msg.id}.`);
       const users = await reaction.users.fetch({ limit });
       const result = [...users.values()].map((u) => ({ id: u.id, username: u.username, bot: u.bot }));
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return structured({ reactions: result });
     },
   }),
   defineTool({
@@ -340,6 +358,9 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to list pins from."),
     }),
+    outputSchema: z.object({
+      messages: z.array(messageSummary.extend({ pinnedAt: z.string() })),
+    }),
     handle: async ({ channel_id }) => {
       const channel = await getTextChannel(channel_id);
       const pinned = await channel.messages.fetchPins();
@@ -347,7 +368,7 @@ const tools = [
         id: m.id, author: m.author.tag, content: m.content,
         timestamp: m.createdAt.toISOString(), pinnedAt: pinnedAt.toISOString(),
       }));
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return structured({ messages: result });
     },
   }),
   defineTool({

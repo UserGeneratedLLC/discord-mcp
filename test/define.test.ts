@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { ZodError } from "zod";
-import { snowflake } from "../src/tools/define.js";
+import { ZodError, z } from "zod";
+import { snowflake, defineTool, defineModule, structured } from "../src/tools/define.js";
 import messages from "../src/tools/messages.js";
 
 const VALID_ID = "123456789012345678";
@@ -53,4 +53,56 @@ test("handle rejects out-of-range and non-integer numbers before reaching the Di
   await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 500 }), ZodError);
   await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 0 }), ZodError);
   await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 3.7 }), ZodError);
+});
+
+test("structured() mirrors data into both a text block and structuredContent", () => {
+  const res = structured({ items: [{ id: "1" }] });
+  assert.deepEqual(res.structuredContent, { items: [{ id: "1" }] });
+  assert.equal(res.content[0].type, "text");
+  assert.deepEqual(JSON.parse(res.content[0].text), { items: [{ id: "1" }] });
+});
+
+test("outputSchema is derived (object root) and exposed on the definition", () => {
+  const mod = defineModule([
+    defineTool({
+      name: "t_out",
+      description: "x",
+      schema: z.object({}),
+      outputSchema: z.object({ items: z.array(z.object({ id: z.string() })) }),
+      handle: async () => structured({ items: [{ id: "1" }] }),
+    }),
+  ]);
+  const schema = mod.definitions[0].outputSchema as Record<string, unknown>;
+  assert.equal(schema.type, "object");
+  assert.ok(!("$schema" in schema), "$schema must be stripped from outputSchema");
+  assert.ok((schema.properties as Record<string, unknown>).items, "output properties derived from the zod schema");
+});
+
+test("structuredContent conforming to outputSchema is normalised; extra keys are dropped", async () => {
+  const mod = defineModule([
+    defineTool({
+      name: "t_norm",
+      description: "x",
+      schema: z.object({}),
+      outputSchema: z.object({ id: z.string() }),
+      handle: async () => structured({ id: "1", extra: "dropped" }),
+    }),
+  ]);
+  const res = await mod.handle("t_norm", {});
+  assert.deepEqual(res!.structuredContent, { id: "1" });
+});
+
+test("non-conforming structuredContent is left intact instead of throwing", async () => {
+  const mod = defineModule([
+    defineTool({
+      name: "t_bad",
+      description: "x",
+      schema: z.object({}),
+      outputSchema: z.object({ id: z.string() }),
+      handle: async () => structured({ id: 42 }),
+    }),
+  ]);
+  // safeParse fails (id is a number), so the handler still returns the raw data — no throw.
+  const res = await mod.handle("t_bad", {});
+  assert.deepEqual(res!.structuredContent, { id: 42 });
 });
