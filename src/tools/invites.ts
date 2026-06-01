@@ -71,7 +71,7 @@ const tools = [
       if (!channel || !("createInvite" in channel)) {
         throw new Error(`Channel ${channel_id} does not support invites.`);
       }
-      const invite = await (channel as any).createInvite({
+      const invite = await channel.createInvite({
         maxAge: max_age,
         maxUses: max_uses,
         unique: unique ?? false,
@@ -114,7 +114,7 @@ const tools = [
       if (!channel || !("fetchInvites" in channel)) {
         throw new Error(`Channel ${channel_id} does not support invites.`);
       }
-      const invites = await (channel as any).fetchInvites();
+      const invites = await channel.fetchInvites();
       const list = [...invites.values()].map(serializeInvite);
       return { content: [{ type: "text", text: JSON.stringify(list, null, 2) }] };
     },

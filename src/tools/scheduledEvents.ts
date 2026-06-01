@@ -168,7 +168,14 @@ const tools = [
         options.status = statusVal;
       }
 
-      const updated = await event.edit(options as unknown as GuildScheduledEventEditOptions<any, any>);
+      const updated = await event.edit(
+        options as unknown as GuildScheduledEventEditOptions<
+          GuildScheduledEventStatus,
+          | GuildScheduledEventStatus.Active
+          | GuildScheduledEventStatus.Completed
+          | GuildScheduledEventStatus.Canceled
+        >,
+      );
       return {
         content: [{ type: "text", text: `✅ Scheduled event "${updated.name}" updated (id: ${updated.id}).` }],
       };

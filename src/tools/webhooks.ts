@@ -23,7 +23,7 @@ const tools = [
     handle: async ({ channel_id, name, avatar }) => {
       const channel = await discord.channels.fetch(channel_id);
       if (!channel || !("createWebhook" in channel)) throw new Error("Channel does not support webhooks.");
-      const webhook = await (channel as any).createWebhook({ name, avatar: avatar ?? undefined });
+      const webhook = await channel.createWebhook({ name, avatar: avatar ?? undefined });
       return {
         content: [{
           type: "text",
@@ -120,13 +120,13 @@ const tools = [
       if (channel_id) {
         const channel = await discord.channels.fetch(channel_id);
         if (!channel || !("fetchWebhooks" in channel)) throw new Error("Channel does not support webhooks.");
-        const webhooks = await (channel as any).fetchWebhooks();
-        const result = [...webhooks.values()].map((w: any) => ({
+        const webhooks = await channel.fetchWebhooks();
+        const result = [...webhooks.values()].map((w) => ({
           id: w.id,
           name: w.name,
           channel_id: w.channelId,
           token: w.token ?? null,
-          creator: w.owner?.tag ?? null,
+          creator: w.owner && "tag" in w.owner ? w.owner.tag : (w.owner?.username ?? null),
         }));
         return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
       } else if (guild_id) {
