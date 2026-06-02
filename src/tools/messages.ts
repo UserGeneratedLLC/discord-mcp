@@ -159,14 +159,18 @@ const tools = [
   defineTool({
     name: "discord_bulk_delete_messages",
     description:
-      "Permanently delete multiple recent messages in one call. IRREVERSIBLE. Discord only allows bulk-deleting messages younger than 14 days; older ones are skipped. Requires the Manage Messages permission. Use discord_delete_message to remove a single specific message. Returns the number actually deleted.",
+      "Permanently delete multiple recent messages in one call. IRREVERSIBLE. SAFE BY DEFAULT: dry_run is true unless explicitly set to false, so call it first to preview, then re-call with dry_run:false to actually delete. Discord only allows bulk-deleting messages younger than 14 days; older ones are skipped. Requires the Manage Messages permission. Returns the number deleted.",
     annotations: { title: "Bulk delete messages", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to delete messages from."),
       count: intIn(2, MAX_FETCH_LIMIT).describe("Number of recent messages to delete (2–100)."),
+      dry_run: z.boolean().optional().describe("If true (default), only reports how many would be deleted without deleting. Set false to actually delete."),
     }),
-    handle: async ({ channel_id, count }) => {
+    handle: async ({ channel_id, count, dry_run }) => {
       const channel = await getTextChannel(channel_id);
+      if (dry_run !== false) {
+        return { content: [{ type: "text", text: `🔍 Dry run: up to ${count} recent messages would be deleted in #${channel.name} (those under 14 days old). Re-call with dry_run:false to delete.` }] };
+      }
       const deleted = await channel.bulkDelete(count, true);
       return { content: [{ type: "text", text: `✅ Deleted ${deleted.size} messages in #${channel.name}.` }] };
     },

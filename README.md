@@ -180,6 +180,7 @@ The server loads `.env` automatically via `dotenv`.
 | `DISCORD_MESSAGE_CONTENT` | `true` | Set to `false` to drop the Message Content privileged intent (use when it isn't enabled in the portal). Message bodies returned by read tools will be empty. |
 | `DISCORD_GUILD_MEMBERS` | `true` | Set to `false` to drop the Server Members privileged intent. Member listing/search tools degrade accordingly. |
 | `DISCORD_MCP_TOOLSETS` | all | Comma-separated list of toolsets to expose, to keep the tool list small. Unset exposes all 97 tools. |
+| `DISCORD_ALLOWED_GUILDS` | all | Comma-separated guild IDs the server may act on. When set, any guild-scoped tool call targeting another guild is rejected. |
 
 Disabling an intent lets the server connect without that privileged intent enabled in the Developer Portal, avoiding the `4014` startup failure.
 
@@ -442,8 +443,8 @@ discord-mcp/
 ### Adding a new tool
 
 1. Create a new file in `src/tools/` (e.g. `events.ts`)
-2. Export `definitions` (tool schemas) and `handle()` (tool logic)
-3. Import and add it to the `modules` array in `src/tools/index.ts`
+2. Declare each tool with `defineTool({ name, description, annotations, schema, handle })` and export `defineModule([...])` as the default
+3. Import it and add it to `allToolsets` in `src/tools/index.ts` (the key is its `DISCORD_MCP_TOOLSETS` name)
 
 ---
 
@@ -452,6 +453,8 @@ discord-mcp/
 - Never commit your Discord token to Git
 - Use environment variables or a `.env` file (not versioned)
 - Give the bot only the permissions it needs
+- Restrict the server to specific servers with `DISCORD_ALLOWED_GUILDS`
+- Irreversible mass actions (`bulk_ban`, `prune_members`, `bulk_delete_messages`, `delete_channel`) default to a `dry_run` preview — pass `dry_run:false` to apply
 
 ---
 

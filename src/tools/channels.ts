@@ -34,16 +34,20 @@ const tools = [
   defineTool({
     name: "discord_delete_channel",
     description:
-      "Permanently delete a channel and all of its messages. IRREVERSIBLE. Requires the Manage Channels permission. An optional reason is recorded in the audit log. Returns a confirmation.",
+      "Permanently delete a channel and all of its messages. IRREVERSIBLE. SAFE BY DEFAULT: dry_run is true unless explicitly set to false, so call it first to preview, then re-call with dry_run:false to actually delete. Requires the Manage Channels permission. An optional reason is recorded in the audit log.",
     annotations: { title: "Delete channel", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel to delete."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
+      dry_run: z.boolean().optional().describe("If true (default), only reports which channel would be deleted without deleting it. Set false to actually delete."),
     }),
-    handle: async ({ channel_id, reason }) => {
+    handle: async ({ channel_id, reason, dry_run }) => {
       const channel = await discord.channels.fetch(channel_id);
       if (!channel) throw new Error("Channel not found.");
       const channelName = "name" in channel ? channel.name : channel.id;
+      if (dry_run !== false) {
+        return { content: [{ type: "text", text: `🔍 Dry run: channel #${channelName} would be deleted. Re-call with dry_run:false to delete.` }] };
+      }
       await channel.delete(reason);
       return { content: [{ type: "text", text: `✅ Channel #${channelName} deleted.` }] };
     },
