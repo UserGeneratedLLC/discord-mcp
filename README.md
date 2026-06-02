@@ -172,6 +172,16 @@ The server loads `.env` automatically via `dotenv`.
 
 </details>
 
+### Environment variables
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `DISCORD_TOKEN` | — | **Required.** Bot token. |
+| `DISCORD_MESSAGE_CONTENT` | `true` | Set to `false` to drop the Message Content privileged intent (use when it isn't enabled in the portal). Message bodies returned by read tools will be empty. |
+| `DISCORD_GUILD_MEMBERS` | `true` | Set to `false` to drop the Server Members privileged intent. Member listing/search tools degrade accordingly. |
+
+Disabling an intent lets the server connect without that privileged intent enabled in the Developer Portal, avoiding the `4014` startup failure.
+
 ---
 
 ## Creating Your Discord Bot
@@ -179,9 +189,11 @@ The server loads `.env` automatically via `dotenv`.
 1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
 2. **New Application** > give it a name
 3. **Bot** tab > **Reset Token** > copy the token
-4. Enable **Privileged Gateway Intents**:
+4. Enable **Privileged Gateway Intents** (both are on by default):
    - Server Members Intent
    - Message Content Intent
+
+   > **Important:** if the bot requests a privileged intent that is not enabled here, Discord closes the connection with code `4014` and every tool call fails at startup. Enable both, or disable the ones you don't need via the env flags below.
 5. **OAuth2 > URL Generator**:
    - Scopes: `bot`
    - Permissions: `Send Messages`, `Read Message History`, `Manage Channels`, `Manage Roles`, `Kick Members`, `Ban Members`, `Moderate Members`, `View Audit Log`, `Manage Messages`, `Manage Threads`, `Add Reactions`, `Manage Guild`, `Manage Webhooks`, `Manage Events`, `Create Instant Invite`

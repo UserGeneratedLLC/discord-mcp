@@ -19,13 +19,26 @@ const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 /** Maximum time to wait for the gateway to reach READY before giving up. */
 const LOGIN_TIMEOUT_MS = 30_000;
 
+/**
+ * Reads a boolean env flag, defaulting to `true`. Set to false/0/no/off to disable.
+ * Used to opt out of the two privileged intents when they are not enabled in the
+ * Discord Developer Portal (otherwise the gateway closes with code 4014 on connect).
+ */
+function envEnabled(name: string): boolean {
+  const value = process.env[name];
+  return value === undefined || !/^(false|0|no|off)$/i.test(value.trim());
+}
+
+const messageContentEnabled = envEnabled("DISCORD_MESSAGE_CONTENT");
+const guildMembersEnabled = envEnabled("DISCORD_GUILD_MEMBERS");
+
 export const discord = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildScheduledEvents,
+    ...(messageContentEnabled ? [GatewayIntentBits.MessageContent] : []),
+    ...(guildMembersEnabled ? [GatewayIntentBits.GuildMembers] : []),
   ],
   rest: { retries: 3, timeout: 15_000 },
 });
