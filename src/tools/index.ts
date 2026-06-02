@@ -5,7 +5,7 @@
  * To add a new tool module:
  * 1. Create a new file in this folder (e.g. `onboarding.ts`)
  * 2. Build it with `defineModule([...])` and default-export the result
- * 3. Import and add it to the `modules` array below
+ * 3. Import and add it to `allToolsets` below (the key is its `DISCORD_MCP_TOOLSETS` name)
  */
 
 import type { ToolModule, ToolDefinition, ToolHandler, ToolResult } from "./types.js";
@@ -25,7 +25,8 @@ import scheduledEvents from "./scheduledEvents.js";
 import invites from "./invites.js";
 import dm from "./dm.js";
 
-const modules: ToolModule[] = [
+/** Every toolset, keyed by the name used in the `DISCORD_MCP_TOOLSETS` env var. */
+const allToolsets: Record<string, ToolModule> = {
   discovery,
   messages,
   channels,
@@ -37,10 +38,33 @@ const modules: ToolModule[] = [
   stats,
   forums,
   webhooks,
-  scheduledEvents,
+  events: scheduledEvents,
   invites,
   dm,
-];
+};
+
+/**
+ * Selects which toolsets to expose from `DISCORD_MCP_TOOLSETS` (comma-separated
+ * names). Unset or empty exposes all 97 tools; unknown names are warned and skipped;
+ * if nothing valid is selected it falls back to all so the server is never toolless.
+ */
+function selectModules(): ToolModule[] {
+  const raw = process.env.DISCORD_MCP_TOOLSETS?.trim();
+  if (!raw) return Object.values(allToolsets);
+  const selected = raw
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => {
+      const mod = allToolsets[name];
+      if (!mod) console.error(`Unknown toolset in DISCORD_MCP_TOOLSETS: "${name}" (known: ${Object.keys(allToolsets).join(", ")}).`);
+      return mod;
+    })
+    .filter((mod): mod is ToolModule => mod !== undefined);
+  return selected.length > 0 ? selected : Object.values(allToolsets);
+}
+
+const modules: ToolModule[] = selectModules();
 
 /** One O(1) name→handler table merged from every module, built once at load. */
 const registry: Map<string, ToolHandler> = (() => {

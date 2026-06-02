@@ -179,8 +179,11 @@ The server loads `.env` automatically via `dotenv`.
 | `DISCORD_TOKEN` | — | **Required.** Bot token. |
 | `DISCORD_MESSAGE_CONTENT` | `true` | Set to `false` to drop the Message Content privileged intent (use when it isn't enabled in the portal). Message bodies returned by read tools will be empty. |
 | `DISCORD_GUILD_MEMBERS` | `true` | Set to `false` to drop the Server Members privileged intent. Member listing/search tools degrade accordingly. |
+| `DISCORD_MCP_TOOLSETS` | all | Comma-separated list of toolsets to expose, to keep the tool list small. Unset exposes all 97 tools. |
 
 Disabling an intent lets the server connect without that privileged intent enabled in the Developer Portal, avoiding the `4014` startup failure.
+
+**Toolsets** (`DISCORD_MCP_TOOLSETS`): `discovery`, `messages`, `channels`, `permissions`, `members`, `roles`, `moderation`, `screening`, `stats`, `forums`, `webhooks`, `events`, `invites`, `dm`. Example — read-only navigation only: `DISCORD_MCP_TOOLSETS=discovery,messages,members`. Only the listed toolsets' tools are advertised and callable.
 
 ---
 
