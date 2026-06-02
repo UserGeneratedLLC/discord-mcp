@@ -75,7 +75,7 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
       name: z.string().describe("Name of the new role (max 100 characters)."),
-      color: z.string().optional().describe("Role color as a hex string, e.g. '#FF5733'."),
+      color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Hex color like '#FF5733'.").optional().describe("Role color as a hex string, e.g. '#FF5733'."),
       hoist: z.boolean().optional().describe("If true, display members with this role separately in the member list."),
       mentionable: z.boolean().optional().describe("If true, anyone can @mention this role."),
       permissions: z.union([z.array(z.string()), z.string()]).optional().describe("Server-wide permission flag names to grant, e.g. ['SendMessages','ViewChannel']. Uses Discord PermissionsBitField flag names."),
@@ -102,7 +102,7 @@ const tools = [
       guild_id: guildId,
       role_id: roleId,
       name: z.string().optional().describe("New role name (max 100 characters)."),
-      color: z.string().optional().describe("New role color as a hex string, e.g. '#FF5733'."),
+      color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Hex color like '#FF5733'.").optional().describe("New role color as a hex string, e.g. '#FF5733'."),
       hoist: z.boolean().optional().describe("If true, display members with this role separately in the member list."),
       mentionable: z.boolean().optional().describe("If true, anyone can @mention this role."),
       permissions: z.union([z.array(z.string()), z.string()]).optional().describe("Permission flag names. Providing this REPLACES the role's entire permission set. Uses Discord PermissionsBitField flag names."),

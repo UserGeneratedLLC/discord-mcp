@@ -7,9 +7,13 @@ import { z } from "zod";
  */
 export const embedFieldsShape = {
   title: z.string().optional().describe("Embed title shown in bold at the top."),
-  url: z.string().optional().describe("URL that makes the title clickable."),
+  url: z.url().optional().describe("URL that makes the title clickable."),
   description: z.string().optional().describe("Main body text of the embed (supports Markdown)."),
-  color: z.string().optional().describe("Side-bar color as a hex string, e.g. '#5865F2'."),
+  color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, "Hex color like '#5865F2'.")
+    .optional()
+    .describe("Side-bar color as a hex string, e.g. '#5865F2'."),
   fields: z
     .array(
       z.object({
@@ -28,14 +32,14 @@ export const embedFieldsShape = {
   author: z
     .object({
       name: z.string().describe("Author display name."),
-      icon_url: z.string().optional().describe("Small icon shown next to the author name."),
-      url: z.string().optional().describe("URL the author name links to."),
+      icon_url: z.url().optional().describe("Small icon shown next to the author name."),
+      url: z.url().optional().describe("URL the author name links to."),
     })
     .optional()
     .describe("Author block shown at the top of the embed."),
-  thumbnail_url: z.string().optional().describe("Small image shown in the top-right corner."),
+  thumbnail_url: z.url().optional().describe("Small image shown in the top-right corner."),
   footer: z.string().optional().describe("Footer text shown at the bottom of the embed."),
-  image_url: z.string().optional().describe("Large image shown below the embed body."),
+  image_url: z.url().optional().describe("Large image shown below the embed body."),
   timestamp: z.boolean().optional().describe("If true, stamp the embed with the current time."),
 } as const;
 
