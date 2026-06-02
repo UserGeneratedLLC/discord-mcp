@@ -32,11 +32,11 @@ test("field descriptions propagate from .describe() into the inputSchema", () =>
 
 test("handle rejects invalid args before reaching the Discord API", async () => {
   // A malformed channel_id fails zod validation synchronously, with no network call.
-  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: "bad" }), ZodError);
+  await assert.rejects(() => messages.handlers.get("discord_read_messages")!({ channel_id: "bad" }), ZodError);
 });
 
-test("handle returns null for a tool it does not own", async () => {
-  assert.equal(await messages.handle("discord_not_a_messages_tool", {}), null);
+test("a module exposes no handler for a tool it does not own", () => {
+  assert.equal(messages.handlers.get("discord_not_a_messages_tool"), undefined);
 });
 
 test("bounded integer fields advertise integer + min/max + default in the inputSchema", () => {
@@ -50,9 +50,10 @@ test("bounded integer fields advertise integer + min/max + default in the inputS
 
 test("handle rejects out-of-range and non-integer numbers before reaching the Discord API", async () => {
   // Valid channel_id, but the bound/integer check on limit fails synchronously with no network call.
-  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 500 }), ZodError);
-  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 0 }), ZodError);
-  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 3.7 }), ZodError);
+  const readMessages = messages.handlers.get("discord_read_messages")!;
+  await assert.rejects(() => readMessages({ channel_id: VALID_ID, limit: 500 }), ZodError);
+  await assert.rejects(() => readMessages({ channel_id: VALID_ID, limit: 0 }), ZodError);
+  await assert.rejects(() => readMessages({ channel_id: VALID_ID, limit: 3.7 }), ZodError);
 });
 
 test("structured() mirrors data into both a text block and structuredContent", () => {
@@ -88,8 +89,8 @@ test("structuredContent conforming to outputSchema is normalised; extra keys are
       handle: async () => structured({ id: "1", extra: "dropped" }),
     }),
   ]);
-  const res = await mod.handle("t_norm", {});
-  assert.deepEqual(res!.structuredContent, { id: "1" });
+  const res = await mod.handlers.get("t_norm")!({});
+  assert.deepEqual(res.structuredContent, { id: "1" });
 });
 
 test("non-conforming structuredContent is left intact instead of throwing", async () => {
@@ -103,6 +104,6 @@ test("non-conforming structuredContent is left intact instead of throwing", asyn
     }),
   ]);
   // safeParse fails (id is a number), so the handler still returns the raw data — no throw.
-  const res = await mod.handle("t_bad", {});
-  assert.deepEqual(res!.structuredContent, { id: 42 });
+  const res = await mod.handlers.get("t_bad")!({});
+  assert.deepEqual(res.structuredContent, { id: 42 });
 });

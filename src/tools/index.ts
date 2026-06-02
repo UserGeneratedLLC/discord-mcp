@@ -4,11 +4,11 @@
  *
  * To add a new tool module:
  * 1. Create a new file in this folder (e.g. `onboarding.ts`)
- * 2. Export `definitions` and `handle()` following the ToolModule interface
+ * 2. Build it with `defineModule([...])` and default-export the result
  * 3. Import and add it to the `modules` array below
  */
 
-import type { ToolModule, ToolDefinition, ToolResult } from "./types.js";
+import type { ToolModule, ToolDefinition, ToolHandler, ToolResult } from "./types.js";
 
 import discovery from "./discovery.js";
 import messages from "./messages.js";
@@ -42,6 +42,18 @@ const modules: ToolModule[] = [
   dm,
 ];
 
+/** One O(1) name→handler table merged from every module, built once at load. */
+const registry: Map<string, ToolHandler> = (() => {
+  const map = new Map<string, ToolHandler>();
+  for (const mod of modules) {
+    for (const [name, handler] of mod.handlers) {
+      if (map.has(name)) throw new Error(`Duplicate tool name across modules: ${name}`);
+      map.set(name, handler);
+    }
+  }
+  return map;
+})();
+
 /**
  * Returns every tool definition across all modules.
  * Called once when the MCP client requests the tool list.
@@ -51,16 +63,11 @@ export function getAllDefinitions(): ToolDefinition[] {
 }
 
 /**
- * Routes a tool call to the first module that recognizes the tool name.
- * @param name - The tool name (e.g. "discord_send_message").
- * @param args - The arguments passed by the MCP client.
- * @returns The tool's response.
- * @throws {Error} If no module handles the given tool name.
+ * Routes a tool call to its handler via the merged registry.
+ * @throws {Error} If no tool owns the given name.
  */
 export async function handleTool(name: string, args: Record<string, unknown>): Promise<ToolResult> {
-  for (const mod of modules) {
-    const result = await mod.handle(name, args);
-    if (result) return result;
-  }
-  throw new Error(`Unknown tool: ${name}`);
+  const handler = registry.get(name);
+  if (!handler) throw new Error(`Unknown tool: ${name}`);
+  return handler(args);
 }

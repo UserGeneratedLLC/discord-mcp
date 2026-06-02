@@ -102,12 +102,11 @@ export function defineTool<S extends z.ZodType>(tool: {
 }
 
 /**
- * Assembles a list of {@link defineTool} tools into a {@link ToolModule}, exposing
- * their definitions and routing a call to the matching tool (or `null` if none owns
- * the name, per the module contract). Validation runs inside each tool's `run`.
+ * Assembles a list of {@link defineTool} tools into a {@link ToolModule}: their
+ * client-facing definitions and a name→handler map the registry merges for O(1)
+ * dispatch. Validation runs inside each tool's `run`.
  */
 export function defineModule(tools: RegisteredTool[]): ToolModule {
-  const byName = new Map(tools.map((t) => [t.name, t]));
   const definitions: ToolDefinition[] = tools.map((t) => ({
     name: t.name,
     description: t.description,
@@ -115,11 +114,6 @@ export function defineModule(tools: RegisteredTool[]): ToolModule {
     inputSchema: t.inputSchema,
     ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
   }));
-
-  async function handle(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
-    const tool = byName.get(name);
-    return tool ? tool.run(args) : null;
-  }
-
-  return { definitions, handle };
+  const handlers = new Map(tools.map((t) => [t.name, t.run]));
+  return { definitions, handlers };
 }
