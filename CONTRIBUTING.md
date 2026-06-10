@@ -98,16 +98,20 @@ npm run dev       # build + run
 
 ## Releasing (maintainers)
 
-Versions live in three files — `package.json`, `package-lock.json` and `server.json` (the MCP Registry manifest) — and must always agree. Never edit them by hand; from an up-to-date `main`, run:
+Versions live in three files — `package.json`, `package-lock.json` and `server.json` (the MCP Registry manifest) — and must always agree. Never edit them by hand. `main` only accepts pull requests, so the flow is:
 
 ```bash
-npm version patch   # or minor / major
+git switch -c release/x.y.z main   # from an up-to-date main
+npm version patch                  # or minor / major
+git push -u origin release/x.y.z
 ```
 
-This bumps all three files (`server.json` via the `version` lifecycle script in `scripts/sync-version.js`), commits, and creates the `vX.Y.Z` tag. Add a `CHANGELOG.md` entry for the new version before or as part of that commit, then push:
+`npm version` bumps all three files (`server.json` via the `version` lifecycle script in `scripts/sync-version.js`), commits, and creates the `vX.Y.Z` tag locally. Make sure `CHANGELOG.md` has an entry for the new version (commit it on the branch if not).
+
+Open a PR and **merge it with a merge commit** (not squash/rebase — the tagged commit must end up in `main`'s history). Then push the tag:
 
 ```bash
-git push origin main --follow-tags
+git push origin vX.Y.Z
 ```
 
 The tag triggers `.github/workflows/release.yml`, which does everything else automatically:
