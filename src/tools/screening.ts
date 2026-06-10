@@ -26,8 +26,6 @@ const tools = [
       description: z.string().nullable(),
     }),
     handle: async ({ guild_id }) => {
-      // Undocumented endpoint — map fields explicitly so payload variations
-      // can't produce structuredContent that violates the declared schema.
       const data = (await discord.rest.get(`/guilds/${guild_id}/member-verification`)) as {
         version?: string | null;
         description?: string | null;
