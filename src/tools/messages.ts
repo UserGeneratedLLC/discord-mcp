@@ -164,12 +164,15 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to delete messages from."),
       count: intIn(2, MAX_FETCH_LIMIT).describe("Number of recent messages to delete (2–100)."),
-      dry_run: z.boolean().optional().describe("If true (default), only reports how many would be deleted without deleting. Set false to actually delete."),
+      dry_run: z.boolean().default(true).describe("If true (default), only reports how many would be deleted without deleting. Set false to actually delete."),
     }),
     handle: async ({ channel_id, count, dry_run }) => {
       const channel = await getTextChannel(channel_id);
-      if (dry_run !== false) {
-        return { content: [{ type: "text", text: `🔍 Dry run: up to ${count} recent messages would be deleted in #${channel.name} (those under 14 days old). Re-call with dry_run:false to delete.` }] };
+      if (dry_run) {
+        const recent = await channel.messages.fetch({ limit: count, cache: false });
+        const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+        const deletable = recent.filter((m) => m.createdTimestamp > cutoff).size;
+        return { content: [{ type: "text", text: `🔍 Dry run: ${deletable} of the ${recent.size} most recent messages in #${channel.name} would be deleted (${recent.size - deletable} older than 14 days are skipped). Re-call with dry_run:false to delete.` }] };
       }
       const deleted = await channel.bulkDelete(count, true);
       return { content: [{ type: "text", text: `✅ Deleted ${deleted.size} messages in #${channel.name}.` }] };

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ZodError, z } from "zod";
-import { snowflake, defineTool, defineModule, structured } from "../src/tools/define.js";
+import { snowflake, guildId, defineTool, defineModule, structured } from "../src/tools/define.js";
 import messages from "../src/tools/messages.js";
 
 const VALID_ID = "123456789012345678";
@@ -125,4 +125,15 @@ test("defineModule throws on duplicate tool names within a module", () => {
       handle: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
     });
   assert.throws(() => defineModule([dup(), dup()]), /Duplicate tool name in module: t_dup/);
+});
+
+test("guildId enforces DISCORD_ALLOWED_GUILDS lazily", () => {
+  process.env.DISCORD_ALLOWED_GUILDS = "111111111111111111";
+  try {
+    assert.ok(guildId.safeParse("111111111111111111").success);
+    assert.ok(!guildId.safeParse("222222222222222222").success);
+  } finally {
+    delete process.env.DISCORD_ALLOWED_GUILDS;
+  }
+  assert.ok(guildId.safeParse("222222222222222222").success, "no restriction when unset");
 });

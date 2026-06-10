@@ -1,6 +1,6 @@
 import { WebhookClient } from "discord.js";
 import { z } from "zod";
-import { discord } from "../client.js";
+import { discord, fetchChannelChecked, assertAllowedGuild } from "../client.js";
 import { buildEmbed, embedObjectSchema } from "../embeds.js";
 import { defineTool, defineModule, snowflake, guildId, httpUrl, structured } from "./define.js";
 
@@ -35,7 +35,7 @@ const tools = [
       avatar: httpUrl.optional().describe("Optional avatar image URL for the webhook."),
     }),
     handle: async ({ channel_id, name, avatar }) => {
-      const channel = await discord.channels.fetch(channel_id);
+      const channel = await fetchChannelChecked(channel_id);
       if (!channel || !("createWebhook" in channel))
         throw new Error("Channel does not support webhooks.");
       const webhook = await channel.createWebhook({ name, avatar: avatar ?? undefined });
@@ -129,6 +129,7 @@ const tools = [
     }),
     handle: async ({ webhook_id, name, avatar, channel_id }) => {
       const webhook = await discord.fetchWebhook(webhook_id);
+      assertAllowedGuild(webhook.guildId);
       const editOptions: Record<string, unknown> = {};
       if (name !== undefined) editOptions.name = name;
       if (avatar !== undefined) editOptions.avatar = avatar;
@@ -158,6 +159,7 @@ const tools = [
     }),
     handle: async ({ webhook_id }) => {
       const webhook = await discord.fetchWebhook(webhook_id);
+      assertAllowedGuild(webhook.guildId);
       const webhookName = webhook.name;
       await webhook.delete();
       return {
@@ -188,7 +190,7 @@ const tools = [
     outputSchema: z.object({ webhooks: z.array(webhookSummary) }),
     handle: async ({ channel_id, guild_id }) => {
       if (channel_id) {
-        const channel = await discord.channels.fetch(channel_id);
+        const channel = await fetchChannelChecked(channel_id);
         if (!channel || !("fetchWebhooks" in channel))
           throw new Error("Channel does not support webhooks.");
         const webhooks = await channel.fetchWebhooks();

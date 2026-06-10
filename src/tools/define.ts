@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isGuildAllowed } from "../client.js";
 import type { ToolModule, ToolDefinition, ToolResult, ToolAnnotations } from "./types.js";
 
 /** A Discord snowflake ID: a 17–20 digit string. Reused by every tool that takes an ID. */
@@ -6,18 +7,12 @@ export const snowflake = z
   .string()
   .regex(/^\d{17,20}$/, "Must be a Discord snowflake ID (17-20 digits).");
 
-/** Guild IDs the server may act on, from `DISCORD_ALLOWED_GUILDS` (empty = no restriction). */
-const allowedGuilds = (process.env.DISCORD_ALLOWED_GUILDS ?? "")
-  .split(",")
-  .map((id) => id.trim())
-  .filter(Boolean);
-
 /**
  * The `guild_id` field, identical across nearly every guild-scoped tool. When
  * `DISCORD_ALLOWED_GUILDS` is set, ids outside the allow-list are rejected at parse time.
  */
 export const guildId = snowflake
-  .refine((id) => allowedGuilds.length === 0 || allowedGuilds.includes(id), "guild_id is not in the DISCORD_ALLOWED_GUILDS allow-list.")
+  .refine(isGuildAllowed, "guild_id is not in the DISCORD_ALLOWED_GUILDS allow-list.")
   .describe("Discord server (guild) ID (snowflake).");
 
 /**

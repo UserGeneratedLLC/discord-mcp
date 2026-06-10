@@ -231,13 +231,13 @@ const tools = [
       guild_id: guildId,
       user_ids: z.array(snowflake).describe("Array of user IDs (snowflakes) to ban."),
       delete_message_seconds: intIn(0, 604800).default(0).describe("Also delete each user's messages from the last N seconds (0–604800, i.e. up to 7 days). Default 0."),
-      dry_run: z.boolean().optional().describe("If true (default), only returns the user IDs that would be banned without banning anyone. Set false to actually ban."),
+      dry_run: z.boolean().default(true).describe("If true (default), only returns the user IDs that would be banned without banning anyone. Set false to actually ban."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
     handle: async ({ guild_id, user_ids, delete_message_seconds, dry_run, reason }) => {
       const guild = await discord.guilds.fetch(guild_id);
       if (user_ids.length === 0) throw new Error("user_ids must be a non-empty array.");
-      if (dry_run !== false) {
+      if (dry_run) {
         return { content: [{ type: "text", text: `🔍 Dry run: ${user_ids.length} users would be banned:\n${JSON.stringify(user_ids, null, 2)}` }] };
       }
       const result = await guild.members.bulkBan(user_ids, {
@@ -256,19 +256,18 @@ const tools = [
       guild_id: guildId,
       days: intIn(1, 30).describe("Inactivity threshold in days (1–30)."),
       roles: z.array(snowflake).optional().describe("Optional role IDs (snowflakes) to include; by default only members with no roles are counted."),
-      dry_run: z.boolean().optional().describe("If true (default), only returns the count that would be pruned without removing anyone. Set false to actually prune."),
+      dry_run: z.boolean().default(true).describe("If true (default), only returns the count that would be pruned without removing anyone. Set false to actually prune."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
     handle: async ({ guild_id, days, roles, dry_run, reason }) => {
       const guild = await discord.guilds.fetch(guild_id);
-      const dryRun = dry_run !== false;
       const pruned = await guild.members.prune({
         days,
-        dry: dryRun,
+        dry: dry_run,
         roles: roles ?? undefined,
         reason,
       });
-      return { content: [{ type: "text", text: dryRun ? `🔍 Dry run: ${pruned} members would be pruned (${days} days inactive).` : `✅ ${pruned} members pruned (${days} days inactive).` }] };
+      return { content: [{ type: "text", text: dry_run ? `🔍 Dry run: ${pruned} members would be pruned (${days} days inactive).` : `✅ ${pruned} members pruned (${days} days inactive).` }] };
     },
   }),
 ];

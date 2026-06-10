@@ -1,6 +1,6 @@
 import { ChannelType, ForumChannel, ThreadChannel } from "discord.js";
 import { z } from "zod";
-import { discord } from "../client.js";
+import { discord, fetchChannelChecked } from "../client.js";
 import { defineTool, defineModule, snowflake, guildId, intIn, structured } from "./define.js";
 
 const threadId = snowflake.describe("ID (snowflake) of the forum post (thread).");
@@ -20,7 +20,7 @@ const threadSummary = z.object({
  * Fetches a channel by ID and guarantees it is a forum channel.
  */
 async function getForumChannel(channelId: string): Promise<ForumChannel> {
-  const channel = await discord.channels.fetch(channelId);
+  const channel = await fetchChannelChecked(channelId);
   if (!channel || channel.type !== ChannelType.GuildForum)
     throw new Error(`Channel ${channelId} is not a forum channel or doesn't exist.`);
   return channel as ForumChannel;
@@ -30,7 +30,7 @@ async function getForumChannel(channelId: string): Promise<ForumChannel> {
  * Fetches a channel by ID and guarantees it is a thread channel.
  */
 async function getThreadChannel(id: string): Promise<ThreadChannel> {
-  const channel = await discord.channels.fetch(id);
+  const channel = await fetchChannelChecked(id);
   if (!channel || !channel.isThread())
     throw new Error(`Channel ${id} is not a thread or doesn't exist.`);
   return channel as ThreadChannel;
