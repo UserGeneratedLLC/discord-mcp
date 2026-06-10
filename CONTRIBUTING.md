@@ -22,7 +22,13 @@ export const definitions = [
     name: "discord_my_tool",
     description:
       "One clear action sentence. Then: when to use it vs. similar tools, required Discord permissions, any side effects or destructive/irreversible behavior, and what it returns.",
-    annotations: { title: "My tool", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "My tool",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     inputSchema: {
       type: "object",
       properties: {
@@ -62,7 +68,7 @@ export default { definitions, handle } satisfies ToolModule;
 ### Tool definition quality
 
 Every tool definition must carry its weight — directory scanners (e.g. Glama) score the
-*lowest*-quality tool heavily, so one thin definition drags the whole server's grade down.
+_lowest_-quality tool heavily, so one thin definition drags the whole server's grade down.
 
 - **Description**: action statement + when to use it vs. similar tools + required Discord
   permissions + side effects / destructive behavior + what it returns.
@@ -89,3 +95,26 @@ npm run dev       # build + run
 3. Build and test your changes
 4. Commit with a descriptive message (e.g. `feat: add my-tool`)
 5. Open a pull request against `main`
+
+## Releasing (maintainers)
+
+Versions live in three files — `package.json`, `package-lock.json` and `server.json` (the MCP Registry manifest) — and must always agree. Never edit them by hand; from an up-to-date `main`, run:
+
+```bash
+npm version patch   # or minor / major
+```
+
+This bumps all three files (`server.json` via the `version` lifecycle script in `scripts/sync-version.js`), commits, and creates the `vX.Y.Z` tag. Add a `CHANGELOG.md` entry for the new version before or as part of that commit, then push:
+
+```bash
+git push origin main --follow-tags
+```
+
+The tag triggers `.github/workflows/release.yml`, which does everything else automatically:
+
+1. Fails fast if the tag does not match `package.json` / `server.json`
+2. Lints, builds, tests, then publishes to npm (`NPM_TOKEN` secret)
+3. Publishes to the official MCP Registry via GitHub OIDC (no secret needed) — the [GitHub MCP Registry](https://github.com/mcp) picks it up automatically
+4. Pushes the Docker images and creates the GitHub Release
+
+No manual `npm publish` — local publishes are blocked by npm's 2FA policy anyway.
