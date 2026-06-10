@@ -47,6 +47,11 @@ export const embedFieldsShape = {
 /** Schema for a single embed object (e.g. an item of `discord_send_multiple_embeds`). */
 export const embedObjectSchema = z.object(embedFieldsShape);
 
+/** Up to 10 embeds — Discord's per-message cap, enforced at parse time and advertised as maxItems. */
+export const embedArraySchema = z
+  .array(embedObjectSchema)
+  .max(10, "Discord allows a maximum of 10 embeds per message.");
+
 /** Validated embed input — the typed shape `buildEmbed` consumes. */
 export type EmbedInput = z.infer<typeof embedObjectSchema>;
 

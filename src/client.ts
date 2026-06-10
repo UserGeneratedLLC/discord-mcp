@@ -7,6 +7,7 @@ import {
   ThreadChannel,
   GuildChannel,
   PermissionsBitField,
+  type GuildTextBasedChannel,
 } from "discord.js";
 
 /**
@@ -67,6 +68,12 @@ discord.on(Events.Invalidated, () => {
  */
 export async function ensureConnected(): Promise<void> {
   if (discordReady) return;
+  // A late READY (after the 30s timeout cleared the listener) must not wedge the
+  // server forever: trust the client state, not only our flag.
+  if (discord.isReady()) {
+    discordReady = true;
+    return;
+  }
 
   if (!DISCORD_TOKEN) {
     throw new Error("DISCORD_TOKEN is required. Set it in your MCP client config or a .env file.");
@@ -138,18 +145,16 @@ export async function fetchChannelChecked(channelId: string) {
 }
 
 /**
- * Fetches a channel by ID and guarantees it is a TextChannel or a thread of any
- * kind (public / private / forum post / announcement thread) — both expose the
- * message-send / edit / fetch surface the message tools use. Announcement (News)
- * channels themselves do NOT pass this check.
+ * Fetches a channel by ID and guarantees it is a guild channel that holds
+ * messages: text, announcement, voice/stage text, or a thread of any kind.
  * @param channelId - Discord snowflake ID of the channel.
- * @throws {Error} If the channel does not exist or is neither a text channel nor a thread.
+ * @throws {Error} If the channel does not exist or is not a message-capable guild channel.
  */
-export async function getTextChannel(channelId: string): Promise<TextChannel | ThreadChannel> {
+export async function getTextChannel(channelId: string): Promise<GuildTextBasedChannel> {
   const id = validateId(channelId, "channel_id");
   const channel = await fetchChannelChecked(id);
-  if (!channel || (!(channel instanceof TextChannel) && !(channel instanceof ThreadChannel)))
-    throw new Error(`Channel ${id} is not a text or thread channel or doesn't exist.`);
+  if (!channel || channel.isDMBased() || !channel.isTextBased())
+    throw new Error(`Channel ${id} is not a message-capable guild channel or doesn't exist.`);
   return channel;
 }
 
@@ -165,6 +170,34 @@ export async function getGuildChannel(channelId: string): Promise<GuildChannel> 
   if (!channel || !(channel instanceof GuildChannel))
     throw new Error(`Channel ${id} is not a guild channel or doesn't exist.`);
   return channel;
+}
+
+/**
+ * Parses permission flag names from an array or a JSON-encoded array string
+ * (some MCP clients serialize arrays), validating every name against
+ * PermissionsBitField.Flags so unknown flags fail with the culprit named.
+ */
+export function parsePermissionNames(value: string[] | string | undefined): string[] {
+  if (value === undefined) return [];
+  let names: unknown = value;
+  if (typeof value === "string") {
+    try {
+      names = JSON.parse(value);
+    } catch {
+      throw new Error(
+        `Invalid permission list: "${value}" is not a JSON array. Pass an array like ["SendMessages"].`,
+      );
+    }
+  }
+  if (!Array.isArray(names) || !names.every((n) => typeof n === "string"))
+    throw new Error("Invalid permission list: expected an array of permission flag names.");
+  for (const name of names) {
+    if (!(name in PermissionsBitField.Flags))
+      throw new Error(
+        `Unknown permission flag: "${name}". Use Discord PermissionsBitField flag names like "SendMessages".`,
+      );
+  }
+  return names;
 }
 
 /**

@@ -9,8 +9,8 @@ import {
 } from "discord.js";
 import { z } from "zod";
 import { discord, getTextChannel, fetchChannelChecked } from "../client.js";
-import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
-import { buildEmbed, embedFieldsShape, embedObjectSchema } from "../embeds.js";
+import { MAX_FETCH_LIMIT, DEFAULTS, AUTO_ARCHIVE_DURATIONS } from "../constants.js";
+import { buildEmbed, embedFieldsShape, embedObjectSchema, embedArraySchema } from "../embeds.js";
 import { defineModule, defineTool, snowflake, intIn, structured } from "./define.js";
 
 const channelId = snowflake.describe("ID (snowflake) of the channel or thread.");
@@ -44,7 +44,9 @@ const tools = [
     annotations: { title: "Read messages", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to read from."),
-      limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.MESSAGES).describe("How many recent messages to fetch (1–100). Default 20."),
+      limit: intIn(1, MAX_FETCH_LIMIT)
+        .default(DEFAULTS.MESSAGES)
+        .describe("How many recent messages to fetch (1–100). Default 20."),
     }),
     outputSchema: z.object({
       messages: z.array(messageSummary.extend({ attachments: z.number(), pinned: z.boolean() })),
@@ -55,8 +57,12 @@ const tools = [
       const result = [...messages.values()]
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
         .map((m) => ({
-          id: m.id, author: m.author.tag, content: m.content,
-          timestamp: m.createdAt.toISOString(), attachments: m.attachments.size, pinned: m.pinned,
+          id: m.id,
+          author: m.author.tag,
+          content: m.content,
+          timestamp: m.createdAt.toISOString(),
+          attachments: m.attachments.size,
+          pinned: m.pinned,
         }));
       return structured({ messages: result });
     },
@@ -65,7 +71,13 @@ const tools = [
     name: "discord_send_message",
     description:
       "Send a plain-text message to a channel or thread. For rich content (title, color, fields, images) use discord_send_embed; to attach a reply reference to an existing message use discord_reply_message. Requires the bot to have the Send Messages permission. Returns the new message ID.",
-    annotations: { title: "Send message", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Send message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the target channel or thread."),
       content: z.string().describe("Plain-text body of the message (max 2000 characters)."),
@@ -73,16 +85,26 @@ const tools = [
     handle: async ({ channel_id, content }) => {
       const channel = await getTextChannel(channel_id);
       const sent = await channel.send(content);
-      return { content: [{ type: "text", text: `✅ Message sent (id: ${sent.id}) in #${channel.name}.` }] };
+      return {
+        content: [{ type: "text", text: `✅ Message sent (id: ${sent.id}) in #${channel.name}.` }],
+      };
     },
   }),
   defineTool({
     name: "discord_reply_message",
     description:
       "Reply to a specific message, attaching a reply reference so clients show it as a threaded reply. Use discord_send_message for a standalone message with no reference. Requires the Send Messages permission. Returns the new reply's message ID.",
-    annotations: { title: "Reply to message", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Reply to message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the message.",
+      ),
       message_id: messageId.describe("ID of the message to reply to."),
       content: z.string().describe("Plain-text body of the reply (max 2000 characters)."),
     }),
@@ -90,57 +112,112 @@ const tools = [
       const channel = await getTextChannel(channel_id);
       const target = await channel.messages.fetch(message_id);
       const sent = await target.reply(content);
-      return { content: [{ type: "text", text: `✅ Reply sent (id: ${sent.id}) to message ${message_id} in #${channel.name}.` }] };
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Reply sent (id: ${sent.id}) to message ${message_id} in #${channel.name}.`,
+          },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_edit_message",
     description:
       "Edit the text content of a message previously sent by this bot. Discord forbids editing other users' messages, so this fails for non-bot messages. Use discord_edit_embed for embed messages. Works in text channels and threads. Returns the edited message ID.",
-    annotations: { title: "Edit message", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Edit message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
-      message_id: messageId.describe("ID of the message to edit. Must be a message authored by this bot."),
-      content: z.string().describe("New plain-text content that fully replaces the existing content (max 2000 characters)."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the message.",
+      ),
+      message_id: messageId.describe(
+        "ID of the message to edit. Must be a message authored by this bot.",
+      ),
+      content: z
+        .string()
+        .describe(
+          "New plain-text content that fully replaces the existing content (max 2000 characters).",
+        ),
     }),
     handle: async ({ channel_id, message_id, content }) => {
       const channel = await getTextChannel(channel_id);
       const msg = await channel.messages.fetch(message_id);
-      if (msg.author.id !== discord.user?.id) throw new Error("Can only edit messages sent by the bot.");
+      if (msg.author.id !== discord.user?.id)
+        throw new Error("Can only edit messages sent by the bot.");
       const edited = await msg.edit(content);
-      return { content: [{ type: "text", text: `✅ Message ${edited.id} edited in #${channel.name}.` }] };
+      return {
+        content: [{ type: "text", text: `✅ Message ${edited.id} edited in #${channel.name}.` }],
+      };
     },
   }),
   defineTool({
     name: "discord_add_reaction",
     description:
       "Add a single emoji reaction to a message as the bot. Requires the Add Reactions and Read Message History permissions. Use discord_remove_reactions to undo. Idempotent: re-adding the bot's existing reaction has no effect.",
-    annotations: { title: "Add reaction", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Add reaction",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the message.",
+      ),
       message_id: messageId.describe("ID of the message to react to."),
-      emoji: z.string().describe("Unicode emoji (e.g. '👍') or a custom emoji in 'name:id' format."),
+      emoji: z
+        .string()
+        .describe("Unicode emoji (e.g. '👍') or a custom emoji in 'name:id' format."),
     }),
     handle: async ({ channel_id, message_id, emoji }) => {
       const channel = await getTextChannel(channel_id);
       const msg = await channel.messages.fetch(message_id);
       await msg.react(emoji);
-      return { content: [{ type: "text", text: `✅ Reacted with ${emoji} to message ${msg.id} in #${channel.name}.` }] };
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Reacted with ${emoji} to message ${msg.id} in #${channel.name}.`,
+          },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_create_thread",
     description:
       "Create a thread, either branching from an existing message (pass message_id) or as a standalone thread in a text channel (omit message_id). Standalone creation requires a parent text channel and fails if channel_id is itself a thread. Requires the Create Public Threads permission. Returns the new thread's ID.",
-    annotations: { title: "Create thread", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Create thread",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: snowflake.describe("ID (snowflake) of the parent text channel. For a message-based thread, the channel containing message_id."),
+      channel_id: snowflake.describe(
+        "ID (snowflake) of the parent text channel. For a message-based thread, the channel containing message_id.",
+      ),
       name: z.string().describe("Name of the thread to create (max 100 characters)."),
-      message_id: snowflake.optional().describe("Optional. Message to branch the thread from. If omitted, a standalone thread is created in the channel."),
+      message_id: snowflake
+        .optional()
+        .describe(
+          "Optional. Message to branch the thread from. If omitted, a standalone thread is created in the channel.",
+        ),
       auto_archive_duration: z
-        .union([z.literal(60), z.literal(1440), z.literal(4320), z.literal(10080)])
+        .literal([...AUTO_ARCHIVE_DURATIONS])
         .default(1440)
-        .describe("Minutes of inactivity before auto-archiving: 60, 1440, 4320, or 10080. Default 1440 (24h)."),
+        .describe(
+          "Minutes of inactivity before auto-archiving: 60, 1440, 4320, or 10080. Default 1440 (24h).",
+        ),
     }),
     handle: async ({ channel_id, name, message_id, auto_archive_duration }) => {
       const channel = await getTextChannel(channel_id);
@@ -148,24 +225,52 @@ const tools = [
       if (message_id) {
         const msg = await channel.messages.fetch(message_id);
         const thread = await msg.startThread({ name, autoArchiveDuration: duration });
-        return { content: [{ type: "text", text: `✅ Thread "${thread.name}" created from message (id: ${thread.id}).` }] };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ Thread "${thread.name}" created from message (id: ${thread.id}).`,
+            },
+          ],
+        };
       }
       if (!(channel instanceof TextChannel)) {
-        throw new Error(`Standalone thread creation requires a parent TextChannel; ${channel_id} is itself a thread. Pass a message_id to start a thread from a message instead.`);
+        throw new Error(
+          `Standalone thread creation requires a parent TextChannel; ${channel_id} is itself a thread. Pass a message_id to start a thread from a message instead.`,
+        );
       }
-      const thread = await channel.threads.create({ name, autoArchiveDuration: duration, type: ChannelType.PublicThread });
-      return { content: [{ type: "text", text: `✅ Thread "${thread.name}" created (id: ${thread.id}).` }] };
+      const thread = await channel.threads.create({
+        name,
+        autoArchiveDuration: duration,
+        type: ChannelType.PublicThread,
+      });
+      return {
+        content: [{ type: "text", text: `✅ Thread "${thread.name}" created (id: ${thread.id}).` }],
+      };
     },
   }),
   defineTool({
     name: "discord_bulk_delete_messages",
     description:
       "Permanently delete multiple recent messages in one call. IRREVERSIBLE. SAFE BY DEFAULT: dry_run is true unless explicitly set to false, so call it first to preview, then re-call with dry_run:false to actually delete. Discord only allows bulk-deleting messages younger than 14 days; older ones are skipped. Requires the Manage Messages permission. Returns the number deleted.",
-    annotations: { title: "Bulk delete messages", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Bulk delete messages",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: snowflake.describe("ID (snowflake) of the channel or thread to delete messages from."),
+      channel_id: snowflake.describe(
+        "ID (snowflake) of the channel or thread to delete messages from.",
+      ),
       count: intIn(2, MAX_FETCH_LIMIT).describe("Number of recent messages to delete (2–100)."),
-      dry_run: z.boolean().default(true).describe("If true (default), only reports how many would be deleted without deleting. Set false to actually delete."),
+      dry_run: z
+        .boolean()
+        .default(true)
+        .describe(
+          "If true (default), only reports how many would be deleted without deleting. Set false to actually delete.",
+        ),
     }),
     handle: async ({ channel_id, count, dry_run }) => {
       const channel = await getTextChannel(channel_id);
@@ -173,17 +278,34 @@ const tools = [
         const recent = await channel.messages.fetch({ limit: count, cache: false });
         const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
         const deletable = recent.filter((m) => m.createdTimestamp > cutoff).size;
-        return { content: [{ type: "text", text: `🔍 Dry run: ${deletable} of the ${recent.size} most recent messages in #${channel.name} would be deleted (${recent.size - deletable} older than 14 days are skipped). Re-call with dry_run:false to delete.` }] };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `🔍 Dry run: ${deletable} of the ${recent.size} most recent messages in #${channel.name} would be deleted (${recent.size - deletable} older than 14 days are skipped). Re-call with dry_run:false to delete.`,
+            },
+          ],
+        };
       }
       const deleted = await channel.bulkDelete(count, true);
-      return { content: [{ type: "text", text: `✅ Deleted ${deleted.size} messages in #${channel.name}.` }] };
+      return {
+        content: [
+          { type: "text", text: `✅ Deleted ${deleted.size} messages in #${channel.name}.` },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_send_embed",
     description:
       "Send a single rich embed (title, description, color, fields, author, footer, images, timestamp). Use discord_send_message for plain text, or discord_send_multiple_embeds to send several embeds at once. Requires the Send Messages and Embed Links permissions. Returns the new message ID.",
-    annotations: { title: "Send embed", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Send embed",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the target channel or thread."),
       ...embedFieldsShape,
@@ -191,52 +313,89 @@ const tools = [
     handle: async ({ channel_id, ...embedArgs }) => {
       const channel = await getTextChannel(channel_id);
       const sent = await channel.send({ embeds: [buildEmbed(embedArgs)] });
-      return { content: [{ type: "text", text: `✅ Embed sent (id: ${sent.id}) in #${channel.name}.` }] };
+      return {
+        content: [{ type: "text", text: `✅ Embed sent (id: ${sent.id}) in #${channel.name}.` }],
+      };
     },
   }),
   defineTool({
     name: "discord_edit_embed",
     description:
       "Replace the embed on a message previously sent by this bot. Only this bot's messages can be edited. This is a full replace, not a merge: provided fields are applied and omitted fields are dropped from the embed. Returns a confirmation.",
-    annotations: { title: "Edit embed", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Edit embed",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
-      message_id: messageId.describe("ID of the message to edit. Must be a message authored by this bot (an embed is added if it has none)."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the message.",
+      ),
+      message_id: messageId.describe(
+        "ID of the message to edit. Must be a message authored by this bot (an embed is added if it has none).",
+      ),
       ...embedFieldsShape,
     }),
     handle: async ({ channel_id, message_id, ...embedArgs }) => {
       const channel = await getTextChannel(channel_id);
       const msg = await channel.messages.fetch(message_id);
-      if (msg.author.id !== discord.user?.id) throw new Error("Can only edit embeds sent by the bot.");
+      if (msg.author.id !== discord.user?.id)
+        throw new Error("Can only edit embeds sent by the bot.");
       await msg.edit({ embeds: [buildEmbed(embedArgs)] });
-      return { content: [{ type: "text", text: `✅ Embed edited on message ${message_id} in #${channel.name}.` }] };
+      return {
+        content: [
+          { type: "text", text: `✅ Embed edited on message ${message_id} in #${channel.name}.` },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_send_multiple_embeds",
     description:
       "Send up to 10 embeds in a single message, with optional text above them. Use discord_send_embed for a single embed. Requires the Send Messages and Embed Links permissions. Returns the new message ID.",
-    annotations: { title: "Send multiple embeds", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Send multiple embeds",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the target channel or thread."),
       content: z.string().optional().describe("Optional plain text shown above the embeds."),
-      embeds: z.array(embedObjectSchema).describe("Array of embed objects to send (max 10)."),
+      embeds: embedArraySchema.describe("Array of embed objects to send (max 10)."),
     }),
     handle: async ({ channel_id, content, embeds }) => {
       const channel = await getTextChannel(channel_id);
-      if (embeds.length > 10) throw new Error("Discord allows a maximum of 10 embeds per message.");
       const built = embeds.map((e) => buildEmbed(e));
       const sent = await channel.send({ content: content || undefined, embeds: built });
-      return { content: [{ type: "text", text: `✅ ${built.length} embeds sent (id: ${sent.id}) in #${channel.name}.` }] };
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ ${built.length} embeds sent (id: ${sent.id}) in #${channel.name}.`,
+          },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_delete_message",
     description:
       "Permanently delete one specific message. IRREVERSIBLE. The bot can always delete its own messages; deleting another user's message requires the Manage Messages permission. Use discord_bulk_delete_messages to remove many at once. An optional reason is recorded in the audit log.",
-    annotations: { title: "Delete message", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Delete message",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the message.",
+      ),
       message_id: messageId.describe("ID of the message to delete."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
@@ -252,16 +411,28 @@ const tools = [
     name: "discord_pin_message",
     description:
       "Pin or unpin a message in a channel, controlled by the pin flag. Requires the Pin Messages permission (a dedicated permission since early 2026, separate from Manage Messages). A channel holds at most 50 pins. Idempotent: pinning an already-pinned message (or unpinning an unpinned one) has no additional effect.",
-    annotations: { title: "Pin or unpin message", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Pin or unpin message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the message.",
+      ),
       message_id: messageId.describe("ID of the message to pin or unpin."),
       pin: z.boolean().describe("true to pin the message, false to unpin it."),
     }),
     handle: async ({ channel_id, message_id, pin }) => {
       const channel = await getTextChannel(channel_id);
       const msg = await channel.messages.fetch(message_id);
-      if (pin) { await msg.pin(); } else { await msg.unpin(); }
+      if (pin) {
+        await msg.pin();
+      } else {
+        await msg.unpin();
+      }
       return { content: [{ type: "text", text: `✅ Message ${pin ? "pinned" : "unpinned"}.` }] };
     },
   }),
@@ -273,7 +444,9 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to search."),
       keyword: z.string().describe("Case-insensitive substring to match within message content."),
-      limit: intIn(1, MAX_FETCH_LIMIT).default(MAX_FETCH_LIMIT).describe("Max number of recent messages to scan (1–100). Default 100."),
+      limit: intIn(1, MAX_FETCH_LIMIT)
+        .default(MAX_FETCH_LIMIT)
+        .describe("Max number of recent messages to scan (1–100). Default 100."),
     }),
     outputSchema: z.object({ matches: z.array(messageSummary) }),
     handle: async ({ channel_id, keyword, limit }) => {
@@ -283,7 +456,12 @@ const tools = [
       const matches = [...messages.values()]
         .filter((m) => m.content.toLowerCase().includes(needle))
         .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
-        .map((m) => ({ id: m.id, author: m.author.tag, content: m.content, timestamp: m.createdAt.toISOString() }));
+        .map((m) => ({
+          id: m.id,
+          author: m.author.tag,
+          content: m.content,
+          timestamp: m.createdAt.toISOString(),
+        }));
       return structured({ matches });
     },
   }),
@@ -291,46 +469,94 @@ const tools = [
     name: "discord_crosspost_message",
     description:
       "Publish (crosspost) a message from an Announcement channel to every server that follows it. Only works in announcement channels on a message that has not already been published. Requires the Send Messages permission (and Manage Messages for messages authored by others). Returns a confirmation.",
-    annotations: { title: "Crosspost message", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Crosspost message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: snowflake.describe("ID (snowflake) of the announcement channel containing the message."),
+      channel_id: snowflake.describe(
+        "ID (snowflake) of the announcement channel containing the message.",
+      ),
       message_id: messageId.describe("ID of the message to publish to followers."),
     }),
     handle: async ({ channel_id, message_id }) => {
       const channel = await fetchChannelChecked(channel_id);
       if (!channel || channel.type !== ChannelType.GuildAnnouncement)
-        throw new Error("Channel is not an announcement channel — only announcement-channel messages can be published.");
+        throw new Error(
+          "Channel is not an announcement channel — only announcement-channel messages can be published.",
+        );
       const msg = await channel.messages.fetch(message_id);
       await msg.crosspost();
-      return { content: [{ type: "text", text: `✅ Message ${msg.id} published to all followers of #${channel.name}.` }] };
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Message ${msg.id} published to all followers of #${channel.name}.`,
+          },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_remove_reactions",
     description:
       "Remove reactions from a message. With no emoji: removes ALL reactions. With emoji only: removes every reaction of that emoji. With emoji and user_id: removes that one user's reaction. Removing all reactions or another user's reaction requires the Manage Messages permission. Use discord_add_reaction to add.",
-    annotations: { title: "Remove reactions", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Remove reactions",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the message.",
+      ),
       message_id: messageId.describe("ID of the message to remove reactions from."),
-      emoji: z.string().optional().describe("Unicode emoji or custom emoji 'name:id'. Omit to remove ALL reactions on the message."),
-      user_id: snowflake.optional().describe("Remove only this user's reaction for the given emoji. Requires emoji to be set."),
+      emoji: z
+        .string()
+        .optional()
+        .describe(
+          "Unicode emoji or custom emoji 'name:id'. Omit to remove ALL reactions on the message.",
+        ),
+      user_id: snowflake
+        .optional()
+        .describe(
+          "Remove only this user's reaction for the given emoji. Requires emoji to be set.",
+        ),
     }),
     handle: async ({ channel_id, message_id, emoji, user_id }) => {
       const channel = await getTextChannel(channel_id);
       const msg = await channel.messages.fetch(message_id);
       if (!emoji) {
         await msg.reactions.removeAll();
-        return { content: [{ type: "text", text: `✅ All reactions removed from message ${msg.id}.` }] };
+        return {
+          content: [{ type: "text", text: `✅ All reactions removed from message ${msg.id}.` }],
+        };
       }
       const reaction = findReaction(msg, emoji);
-      if (!reaction) throw new Error(`No reaction found for emoji "${emoji}" on message ${msg.id}.`);
+      if (!reaction)
+        throw new Error(`No reaction found for emoji "${emoji}" on message ${msg.id}.`);
       if (user_id) {
         await reaction.users.remove(user_id);
-        return { content: [{ type: "text", text: `✅ Removed ${emoji} reaction from user ${user_id} on message ${msg.id}.` }] };
+        return {
+          content: [
+            {
+              type: "text",
+              text: `✅ Removed ${emoji} reaction from user ${user_id} on message ${msg.id}.`,
+            },
+          ],
+        };
       }
       await reaction.remove();
-      return { content: [{ type: "text", text: `✅ All ${emoji} reactions removed from message ${msg.id}.` }] };
+      return {
+        content: [
+          { type: "text", text: `✅ All ${emoji} reactions removed from message ${msg.id}.` },
+        ],
+      };
     },
   }),
   defineTool({
@@ -339,25 +565,36 @@ const tools = [
       "List the users who reacted to a message with a specific emoji. Returns { reactions: [...] } with id, username, bot flag. Read-only.",
     annotations: { title: "Get reactions", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the message.",
+      ),
       message_id: messageId.describe("ID of the message to inspect."),
       emoji: z.string().describe("Unicode emoji or custom emoji 'name:id' to list reactors for."),
-      limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.LIMIT).describe("Max users to return (1–100). Default 25."),
+      limit: intIn(1, MAX_FETCH_LIMIT)
+        .default(DEFAULTS.LIMIT)
+        .describe("Max users to return (1–100). Default 25."),
     }),
     outputSchema: z.object({
-      reactions: z.array(z.object({
-        id: z.string(),
-        username: z.string(),
-        bot: z.boolean(),
-      })),
+      reactions: z.array(
+        z.object({
+          id: z.string(),
+          username: z.string(),
+          bot: z.boolean(),
+        }),
+      ),
     }),
     handle: async ({ channel_id, message_id, emoji, limit }) => {
       const channel = await getTextChannel(channel_id);
       const msg = await channel.messages.fetch(message_id);
       const reaction = findReaction(msg, emoji);
-      if (!reaction) throw new Error(`No reaction found for emoji "${emoji}" on message ${msg.id}.`);
+      if (!reaction)
+        throw new Error(`No reaction found for emoji "${emoji}" on message ${msg.id}.`);
       const users = await reaction.users.fetch({ limit });
-      const result = [...users.values()].map((u) => ({ id: u.id, username: u.username, bot: u.bot }));
+      const result = [...users.values()].map((u) => ({
+        id: u.id,
+        username: u.username,
+        bot: u.bot,
+      }));
       return structured({ reactions: result });
     },
   }),
@@ -376,8 +613,11 @@ const tools = [
       const channel = await getTextChannel(channel_id);
       const pinned = await channel.messages.fetchPins();
       const result = pinned.items.map(({ message: m, pinnedAt }) => ({
-        id: m.id, author: m.author.tag, content: m.content,
-        timestamp: m.createdAt.toISOString(), pinnedAt: pinnedAt.toISOString(),
+        id: m.id,
+        author: m.author.tag,
+        content: m.content,
+        timestamp: m.createdAt.toISOString(),
+        pinnedAt: pinnedAt.toISOString(),
       }));
       return structured({ messages: result });
     },
@@ -386,9 +626,17 @@ const tools = [
     name: "discord_forward_message",
     description:
       "Forward an existing message to another channel using Discord's native forward, which preserves the original attribution. Works across text channels and threads. Use discord_send_message to compose new content instead. Requires the Send Messages permission in the target channel. Returns a confirmation.",
-    annotations: { title: "Forward message", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Forward message",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
-      channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the source message."),
+      channel_id: channelId.describe(
+        "ID (snowflake) of the channel or thread containing the source message.",
+      ),
       message_id: messageId.describe("ID of the message to forward."),
       target_channel_id: snowflake.describe("ID (snowflake) of the destination channel or thread."),
     }),
@@ -398,8 +646,14 @@ const tools = [
       const targetChannel = await getTextChannel(target_channel_id);
       // ThreadChannel<boolean> is the abstract base for PublicThreadChannel / PrivateThreadChannel;
       // any runtime instance is one of them, but the type narrowing can't be expressed without a cast.
-      await msg.forward(targetChannel as TextChannel | PublicThreadChannel<boolean> | PrivateThreadChannel);
-      return { content: [{ type: "text", text: `✅ Message ${msg.id} forwarded to #${targetChannel.name}.` }] };
+      await msg.forward(
+        targetChannel as TextChannel | PublicThreadChannel<boolean> | PrivateThreadChannel,
+      );
+      return {
+        content: [
+          { type: "text", text: `✅ Message ${msg.id} forwarded to #${targetChannel.name}.` },
+        ],
+      };
     },
   }),
 ];

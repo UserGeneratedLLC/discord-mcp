@@ -27,7 +27,10 @@ const tools = [
     outputSchema: z.object({ guilds: z.array(guildSummary) }),
     handle: async () => {
       const guilds = discord.guilds.cache.map((g) => ({
-        id: g.id, name: g.name, memberCount: g.memberCount, icon: g.iconURL(),
+        id: g.id,
+        name: g.name,
+        memberCount: g.memberCount,
+        icon: g.iconURL(),
       }));
       return structured({ guilds });
     },
@@ -55,10 +58,16 @@ const tools = [
     handle: async ({ guild_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       return structured({
-        id: guild.id, name: guild.name, description: guild.description,
-        memberCount: guild.memberCount, channelCount: guild.channels.cache.size,
-        roleCount: guild.roles.cache.size, boostLevel: guild.premiumTier,
-        boostCount: guild.premiumSubscriptionCount, createdAt: guild.createdAt.toISOString(), owner: guild.ownerId,
+        id: guild.id,
+        name: guild.name,
+        description: guild.description,
+        memberCount: guild.memberCount,
+        channelCount: guild.channels.cache.size,
+        roleCount: guild.roles.cache.size,
+        boostLevel: guild.premiumTier,
+        boostCount: guild.premiumSubscriptionCount,
+        createdAt: guild.createdAt.toISOString(),
+        owner: guild.ownerId,
       });
     },
   }),
@@ -79,7 +88,9 @@ const tools = [
         .sort((a, b) => (a as CategoryChannel).position - (b as CategoryChannel).position);
 
       const result: Record<string, unknown[]> = { "No Category": [] };
-      categories.forEach((cat) => { result[cat.name] = []; });
+      categories.forEach((cat) => {
+        result[cat.name] = [];
+      });
 
       guild.channels.cache
         .filter((c) => c.type !== ChannelType.GuildCategory)

@@ -47,12 +47,14 @@ const tools = [
       guild_id: guildId,
     }),
     outputSchema: z.object({
-      channels: z.array(z.object({
-        id: z.string(),
-        name: z.string(),
-        topic: z.string().nullable(),
-        parentId: z.string().nullable(),
-      })),
+      channels: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          topic: z.string().nullable(),
+          parentId: z.string().nullable(),
+        }),
+      ),
     }),
     handle: async ({ guild_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
@@ -72,12 +74,20 @@ const tools = [
     name: "discord_create_forum_channel",
     description:
       "Create a new forum channel in a server. A forum holds posts (threads) rather than a linear message feed. Requires the Manage Channels permission. Use discord_create_channel for text/voice channels instead. Returns the new channel's name and ID.",
-    annotations: { title: "Create forum channel", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Create forum channel",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       name: z.string().describe("Name of the new forum channel (max 100 characters)."),
       topic: z.string().optional().describe("Guidelines/topic text shown at the top of the forum."),
-      category_id: snowflake.optional().describe("Optional category (snowflake) to nest the forum under."),
+      category_id: snowflake
+        .optional()
+        .describe("Optional category (snowflake) to nest the forum under."),
     }),
     handle: async ({ guild_id, name, topic, category_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
@@ -87,19 +97,34 @@ const tools = [
         topic,
         parent: category_id,
       });
-      return { content: [{ type: "text", text: `✅ Forum channel #${created.name} created (id: ${created.id}).` }] };
+      return {
+        content: [
+          { type: "text", text: `✅ Forum channel #${created.name} created (id: ${created.id}).` },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_create_forum_post",
     description:
       "Create a new post (a thread with a starter message) in a forum channel. Requires the Send Messages and Create Public Threads permissions. Use discord_reply_to_forum to add follow-up messages. Returns the new post's name and thread ID.",
-    annotations: { title: "Create forum post", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Create forum post",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       forum_channel_id: snowflake.describe("ID (snowflake) of the forum channel to post in."),
-      title: z.string().describe("Title of the post, used as the thread name (max 100 characters)."),
+      title: z
+        .string()
+        .describe("Title of the post, used as the thread name (max 100 characters)."),
       content: z.string().describe("Body of the post's starter message (max 2000 characters)."),
-      applied_tags: z.array(z.string()).optional().describe("Optional tag IDs to apply. Get valid IDs from discord_get_forum_tags."),
+      applied_tags: z
+        .array(z.string())
+        .optional()
+        .describe("Optional tag IDs to apply. Get valid IDs from discord_get_forum_tags."),
     }),
     handle: async ({ forum_channel_id, title, content, applied_tags }) => {
       const forum = await getForumChannel(forum_channel_id);
@@ -108,7 +133,14 @@ const tools = [
         message: { content },
         appliedTags: applied_tags ?? [],
       });
-      return { content: [{ type: "text", text: `✅ Forum post "${thread.name}" created (id: ${thread.id}) in #${forum.name}.` }] };
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Forum post "${thread.name}" created (id: ${thread.id}) in #${forum.name}.`,
+          },
+        ],
+      };
     },
   }),
   defineTool({
@@ -118,15 +150,19 @@ const tools = [
     annotations: { title: "Get forum post", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       thread_id: threadId,
-      limit: intIn(1, 100).default(20).describe("How many recent messages to include (1–100). Default 20."),
+      limit: intIn(1, 100)
+        .default(20)
+        .describe("How many recent messages to include (1–100). Default 20."),
     }),
     outputSchema: threadSummary.extend({
-      messages: z.array(z.object({
-        id: z.string(),
-        author: z.string(),
-        content: z.string(),
-        timestamp: z.string(),
-      })),
+      messages: z.array(
+        z.object({
+          id: z.string(),
+          author: z.string(),
+          content: z.string(),
+          timestamp: z.string(),
+        }),
+      ),
     }),
     handle: async ({ thread_id, limit }) => {
       const thread = await getThreadChannel(thread_id);
@@ -157,9 +193,18 @@ const tools = [
       "List posts in a forum channel. Returns { threads: [...], hasMore, nextBefore }. The first call (no `before`) includes all active posts plus the first page of archived posts; archived posts are paginated, so if hasMore is true pass nextBefore back as `before` to fetch older archived posts. Read-only. Use discord_get_forum_post to read one post's messages.",
     annotations: { title: "List forum threads", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
-      forum_channel_id: snowflake.describe("ID (snowflake) of the forum channel to list posts from."),
-      limit: intIn(1, 100).default(100).describe("Max archived posts per page (1–100). Default 100."),
-      before: z.string().optional().describe("Pagination cursor: an ISO timestamp. Pass the previous response's nextBefore to fetch older archived posts. When set, active posts are omitted."),
+      forum_channel_id: snowflake.describe(
+        "ID (snowflake) of the forum channel to list posts from.",
+      ),
+      limit: intIn(1, 100)
+        .default(100)
+        .describe("Max archived posts per page (1–100). Default 100."),
+      before: z
+        .string()
+        .optional()
+        .describe(
+          "Pagination cursor: an ISO timestamp. Pass the previous response's nextBefore to fetch older archived posts. When set, active posts are omitted.",
+        ),
     }),
     outputSchema: z.object({
       threads: z.array(threadSummary),
@@ -186,7 +231,9 @@ const tools = [
         createdAt: t.createdAt?.toISOString() ?? null,
       }));
       const lastArchived = archived.threads.last();
-      const nextBefore = archived.hasMore ? lastArchived?.archivedAt?.toISOString() ?? null : null;
+      const nextBefore = archived.hasMore
+        ? (lastArchived?.archivedAt?.toISOString() ?? null)
+        : null;
       return structured({ threads, hasMore: archived.hasMore, nextBefore });
     },
   }),
@@ -194,7 +241,13 @@ const tools = [
     name: "discord_reply_to_forum",
     description:
       "Post a follow-up message inside an existing forum post (thread). Requires the Send Messages in Threads permission (shown as 'Send Messages in Posts' for forums). Use discord_create_forum_post to start a new post instead. Returns the new message ID.",
-    annotations: { title: "Reply to forum post", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Reply to forum post",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       thread_id: snowflake.describe("ID (snowflake) of the forum post (thread) to reply in."),
       content: z.string().describe("Plain-text body of the reply (max 2000 characters)."),
@@ -202,14 +255,24 @@ const tools = [
     handle: async ({ thread_id, content }) => {
       const thread = await getThreadChannel(thread_id);
       const sent = await thread.send(content);
-      return { content: [{ type: "text", text: `✅ Reply sent (id: ${sent.id}) in thread "${thread.name}".` }] };
+      return {
+        content: [
+          { type: "text", text: `✅ Reply sent (id: ${sent.id}) in thread "${thread.name}".` },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_delete_forum_post",
     description:
       "Permanently delete a forum post (thread) and all its messages. IRREVERSIBLE. To merely close it without deleting, use discord_update_forum_post with archived:true. Requires the Manage Threads permission.",
-    annotations: { title: "Delete forum post", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Delete forum post",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       thread_id: snowflake.describe("ID (snowflake) of the forum post (thread) to delete."),
     }),
@@ -226,15 +289,19 @@ const tools = [
       "List the tags available on a forum channel (id, name, emoji, moderated flag). Read-only. Use these IDs with discord_create_forum_post or discord_update_forum_post; manage the tag set with discord_set_forum_tags.",
     annotations: { title: "Get forum tags", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
-      forum_channel_id: snowflake.describe("ID (snowflake) of the forum channel to read tags from."),
+      forum_channel_id: snowflake.describe(
+        "ID (snowflake) of the forum channel to read tags from.",
+      ),
     }),
     outputSchema: z.object({
-      tags: z.array(z.object({
-        id: z.string(),
-        name: z.string(),
-        emoji: z.string().nullable(),
-        moderated: z.boolean(),
-      })),
+      tags: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          emoji: z.string().nullable(),
+          moderated: z.boolean(),
+        }),
+      ),
     }),
     handle: async ({ forum_channel_id }) => {
       const forum = await getForumChannel(forum_channel_id);
@@ -251,14 +318,29 @@ const tools = [
     name: "discord_set_forum_tags",
     description:
       "Replace the full set of available tags on a forum channel with the provided list. This overwrites existing tags, so include every tag you want to keep. Requires the Manage Channels permission. Returns a confirmation.",
-    annotations: { title: "Set forum tags", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Set forum tags",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
       forum_channel_id: snowflake.describe("ID (snowflake) of the forum channel to set tags on."),
-      tags: z.array(z.object({
-        name: z.string().describe("Tag label (max 20 characters)."),
-        emoji_name: z.string().optional().describe("Optional unicode emoji shown on the tag."),
-        moderated: z.boolean().optional().describe("If true, only members with Manage Threads can apply this tag. Default false."),
-      })).describe("Complete list of tags to set (replaces all existing tags)."),
+      tags: z
+        .array(
+          z.object({
+            name: z.string().describe("Tag label (max 20 characters)."),
+            emoji_name: z.string().optional().describe("Optional unicode emoji shown on the tag."),
+            moderated: z
+              .boolean()
+              .optional()
+              .describe(
+                "If true, only members with Manage Threads can apply this tag. Default false.",
+              ),
+          }),
+        )
+        .describe("Complete list of tags to set (replaces all existing tags)."),
     }),
     handle: async ({ forum_channel_id, tags }) => {
       const forum = await getForumChannel(forum_channel_id);
@@ -268,20 +350,44 @@ const tools = [
         moderated: t.moderated ?? false,
       }));
       await forum.setAvailableTags(mapped);
-      return { content: [{ type: "text", text: `✅ Forum tags updated on #${forum.name} (${mapped.length} tags set).` }] };
+      return {
+        content: [
+          {
+            type: "text",
+            text: `✅ Forum tags updated on #${forum.name} (${mapped.length} tags set).`,
+          },
+        ],
+      };
     },
   }),
   defineTool({
     name: "discord_update_forum_post",
     description:
       "Update a forum post's title, archived/locked state, or applied tags. Only provided fields change; passing applied_tags replaces the post's tags. Set archived:true to close a post without deleting it. Requires the Manage Threads permission.",
-    annotations: { title: "Update forum post", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Update forum post",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
       thread_id: snowflake.describe("ID (snowflake) of the forum post (thread) to update."),
       title: z.string().optional().describe("New title/thread name (max 100 characters)."),
-      archived: z.boolean().optional().describe("true to archive (close) the post, false to reopen it."),
-      locked: z.boolean().optional().describe("true to lock the post so only moderators can reply."),
-      applied_tags: z.array(z.string()).optional().describe("Tag IDs to apply; replaces the post's current tags. Get valid IDs from discord_get_forum_tags."),
+      archived: z
+        .boolean()
+        .optional()
+        .describe("true to archive (close) the post, false to reopen it."),
+      locked: z
+        .boolean()
+        .optional()
+        .describe("true to lock the post so only moderators can reply."),
+      applied_tags: z
+        .array(z.string())
+        .optional()
+        .describe(
+          "Tag IDs to apply; replaces the post's current tags. Get valid IDs from discord_get_forum_tags.",
+        ),
     }),
     handle: async ({ thread_id, title, archived, locked, applied_tags }) => {
       const thread = await getThreadChannel(thread_id);

@@ -80,6 +80,7 @@ const tools = [
       const code = invite_code.replace(/^(https?:\/\/)?(discord\.gg\/)?/, "");
       if (!code) throw new Error("invite_code is required.");
       const invite = await discord.fetchInvite(code);
+      assertAllowedGuild(invite.guild?.id);
       return structured(serializeInvite(invite));
     },
   }),

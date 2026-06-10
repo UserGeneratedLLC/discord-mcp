@@ -38,7 +38,7 @@ const tools = [
         voice: ChannelType.GuildVoice,
         category: ChannelType.GuildCategory,
       };
-      const channelType = typeMap[type ?? "text"] ?? ChannelType.GuildText;
+      const channelType = typeMap[type ?? "text"];
       const created = await guild.channels.create({
         name,
         type: channelType as
