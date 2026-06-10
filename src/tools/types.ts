@@ -13,18 +13,28 @@ export interface ToolAnnotations {
   openWorldHint?: boolean;
 }
 
-/** Schema definition for a single MCP tool, describing its name, purpose, and expected input. */
+/**
+ * Schema definition for a single MCP tool: its name, purpose, and expected input.
+ * `outputSchema` is the JSON Schema (object root) of the tool's `structuredContent`,
+ * present only on tools that return structured output.
+ */
 export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
   annotations?: ToolAnnotations;
 }
 
-/** Standard response returned by every tool handler. */
+/**
+ * Standard response returned by every tool handler. `structuredContent` is an
+ * optional machine-readable mirror of the text block, conforming to the tool's
+ * `outputSchema` when one is declared.
+ */
 export interface ToolResult {
   [key: string]: unknown;
   content: { type: string; text: string }[];
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 }
 

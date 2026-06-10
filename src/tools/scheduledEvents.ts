@@ -2,7 +2,7 @@ import { GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel, GuildSc
 import { z } from "zod";
 import { discord } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
-import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, intIn, structured } from "./define.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -51,6 +51,27 @@ function serializeEvent(event: import("discord.js").GuildScheduledEvent) {
 
 // ─── Tools ──────────────────────────────────────────────────────────────────────
 
+const eventSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable(),
+  status: z.union([z.string(), z.number()]),
+  entity_type: z.union([z.string(), z.number()]),
+  channel_id: z.string().nullable(),
+  location: z.string().nullable(),
+  scheduled_start_time: z.string().nullable(),
+  scheduled_end_time: z.string().nullable(),
+  creator_id: z.string().nullable(),
+  user_count: z.number().nullable(),
+  image: z.string().nullable(),
+});
+
+const subscriberSummary = z.object({
+  user_id: z.string(),
+  username: z.string(),
+  avatar: z.string(),
+});
+
 /** Tool definitions for managing guild scheduled events. */
 const tools = [
   defineTool({
@@ -61,11 +82,14 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
     }),
+    outputSchema: z.object({
+      events: z.array(eventSummary),
+    }),
     handle: async ({ guild_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const events = await guild.scheduledEvents.fetch();
       const list = [...events.values()].map(serializeEvent);
-      return { content: [{ type: "text", text: JSON.stringify(list, null, 2) }] };
+      return structured({ events: list });
     },
   }),
   defineTool({
@@ -77,10 +101,11 @@ const tools = [
       guild_id: guildId,
       event_id: snowflake.describe("ID (snowflake) of the scheduled event."),
     }),
+    outputSchema: eventSummary,
     handle: async ({ guild_id, event_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const event = await guild.scheduledEvents.fetch(event_id);
-      return { content: [{ type: "text", text: JSON.stringify(serializeEvent(event), null, 2) }] };
+      return structured(serializeEvent(event));
     },
   }),
   defineTool({
@@ -210,6 +235,10 @@ const tools = [
       limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.LIMIT).describe("Max subscribers per page (1–100). Default 25."),
       after: snowflake.optional().describe("Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page."),
     }),
+    outputSchema: z.object({
+      subscribers: z.array(subscriberSummary),
+      nextCursor: z.string().nullable(),
+    }),
     handle: async ({ guild_id, event_id, limit, after }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const event = await guild.scheduledEvents.fetch(event_id);
@@ -220,7 +249,7 @@ const tools = [
         avatar: sub.user.displayAvatarURL(),
       }));
       const nextCursor = subscribers.size === limit ? subscribers.lastKey() ?? null : null;
-      return { content: [{ type: "text", text: JSON.stringify({ subscribers: list, nextCursor }, null, 2) }] };
+      return structured({ subscribers: list, nextCursor });
     },
   }),
   defineTool({

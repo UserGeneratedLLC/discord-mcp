@@ -1,9 +1,26 @@
 import { ColorResolvable, Role, Guild } from "discord.js";
 import { z } from "zod";
 import { discord, serializePermissions, deserializePermissions } from "../client.js";
-import { defineTool, defineModule, snowflake, guildId } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, structured } from "./define.js";
 
 const roleId = snowflake.describe("ID (snowflake) of the role to edit.");
+
+const roleSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  color: z.string(),
+  position: z.number(),
+  memberCount: z.number(),
+  permissions: z.array(z.string()),
+  hoist: z.boolean(),
+  mentionable: z.boolean(),
+});
+
+const roleMember = z.object({
+  id: z.string(),
+  username: z.string(),
+  nickname: z.string().nullable(),
+});
 
 /**
  * Parses a permission array from tool arguments.
@@ -35,6 +52,7 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
     }),
+    outputSchema: z.object({ roles: z.array(roleSummary) }),
     handle: async ({ guild_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const roles = await guild.roles.fetch();
@@ -46,7 +64,7 @@ const tools = [
           memberCount: r.members.size, permissions: serializePermissions(r.permissions),
           hoist: r.hoist, mentionable: r.mentionable,
         }));
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return structured({ roles: result });
     },
   }),
   defineTool({
@@ -165,6 +183,11 @@ const tools = [
       guild_id: guildId,
       role_id: snowflake.describe("ID (snowflake) of the role to list holders of."),
     }),
+    outputSchema: z.object({
+      members: z.array(roleMember),
+      truncated: z.boolean(),
+      note: z.string().optional(),
+    }),
     handle: async ({ guild_id, role_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const role = await fetchRole(guild, role_id);
@@ -178,11 +201,11 @@ const tools = [
         after = page.lastKey();
       }
       const members = role.members.map((m) => ({ id: m.id, username: m.user.tag, nickname: m.nickname }));
-      return { content: [{ type: "text", text: JSON.stringify({
+      return structured({
         members,
         truncated,
         note: truncated ? `Only the first ${MAX_PAGES * 1000} members were scanned; results may be incomplete on very large servers.` : undefined,
-      }, null, 2) }] };
+      });
     },
   }),
   defineTool({

@@ -2,7 +2,16 @@ import { GuildMember } from "discord.js";
 import { z } from "zod";
 import { discord, serializePermissions } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
-import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, intIn, structured } from "./define.js";
+
+const roleRef = z.object({ id: z.string(), name: z.string() });
+const memberSummary = z.object({
+  id: z.string(),
+  username: z.string(),
+  nickname: z.string().nullable(),
+  roles: z.array(roleRef),
+  joinedAt: z.string().nullable(),
+});
 
 /** Tool definitions for listing, inspecting, and moderating guild members. */
 const tools = [
@@ -16,16 +25,17 @@ const tools = [
       limit: intIn(1, DEFAULTS.MEMBERS_MAX).default(DEFAULTS.MEMBERS).describe("How many members per page (1–1000). Default 50."),
       after: snowflake.optional().describe("Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page."),
     }),
+    outputSchema: z.object({ members: z.array(memberSummary), nextCursor: z.string().nullable() }),
     handle: async ({ guild_id, limit, after }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const members = await guild.members.list({ limit, after });
       const result = [...members.values()].map((m: GuildMember) => ({
         id: m.id, username: m.user.tag, nickname: m.nickname,
         roles: m.roles.cache.filter((r) => r.name !== "@everyone").map((r) => ({ id: r.id, name: r.name })),
-        joinedAt: m.joinedAt?.toISOString(),
+        joinedAt: m.joinedAt?.toISOString() ?? null,
       }));
       const nextCursor = members.size === limit ? members.lastKey() ?? null : null;
-      return { content: [{ type: "text", text: JSON.stringify({ members: result, nextCursor }, null, 2) }] };
+      return structured({ members: result, nextCursor });
     },
   }),
   defineTool({
@@ -37,20 +47,27 @@ const tools = [
       guild_id: guildId,
       user_id: snowflake.describe("Discord user ID (snowflake) of the member."),
     }),
+    outputSchema: z.object({
+      id: z.string(),
+      username: z.string(),
+      nickname: z.string().nullable(),
+      roles: z.array(roleRef),
+      permissions: z.array(z.string()),
+      joinedAt: z.string().nullable(),
+      createdAt: z.string(),
+      bot: z.boolean(),
+      timedOutUntil: z.string().nullable(),
+    }),
     handle: async ({ guild_id, user_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const member = await guild.members.fetch(user_id);
-      return {
-        content: [{
-          type: "text", text: JSON.stringify({
-            id: member.id, username: member.user.tag, nickname: member.nickname,
-            roles: member.roles.cache.filter((r) => r.name !== "@everyone").map((r) => ({ id: r.id, name: r.name })),
-            permissions: serializePermissions(member.permissions),
-            joinedAt: member.joinedAt?.toISOString(), createdAt: member.user.createdAt.toISOString(),
-            bot: member.user.bot, timedOutUntil: member.communicationDisabledUntil?.toISOString() ?? null,
-          }, null, 2),
-        }],
-      };
+      return structured({
+        id: member.id, username: member.user.tag, nickname: member.nickname,
+        roles: member.roles.cache.filter((r) => r.name !== "@everyone").map((r) => ({ id: r.id, name: r.name })),
+        permissions: serializePermissions(member.permissions),
+        joinedAt: member.joinedAt?.toISOString() ?? null, createdAt: member.user.createdAt.toISOString(),
+        bot: member.user.bot, timedOutUntil: member.communicationDisabledUntil?.toISOString() ?? null,
+      });
     },
   }),
   defineTool({
@@ -140,6 +157,14 @@ const tools = [
       query: z.string().describe("Prefix to match against usernames and nicknames."),
       limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.LIMIT).describe("Max members to return (1–100). Default 25."),
     }),
+    outputSchema: z.object({
+      members: z.array(z.object({
+        id: z.string(),
+        username: z.string(),
+        nickname: z.string().nullable(),
+        roles: z.array(roleRef),
+      })),
+    }),
     handle: async ({ guild_id, query, limit }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const members = await guild.members.search({ query, limit });
@@ -147,7 +172,7 @@ const tools = [
         id: m.id, username: m.user.tag, nickname: m.nickname,
         roles: m.roles.cache.filter((r) => r.name !== "@everyone").map((r) => ({ id: r.id, name: r.name })),
       }));
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return structured({ members: result });
     },
   }),
   defineTool({
@@ -179,6 +204,14 @@ const tools = [
       limit: intIn(1, DEFAULTS.MEMBERS_MAX).default(DEFAULTS.MEMBERS_MAX).describe("Max bans per page (1–1000). Default 1000."),
       after: snowflake.optional().describe("Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page."),
     }),
+    outputSchema: z.object({
+      bans: z.array(z.object({
+        user_id: z.string(),
+        username: z.string(),
+        reason: z.string().nullable(),
+      })),
+      nextCursor: z.string().nullable(),
+    }),
     handle: async ({ guild_id, limit, after }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const bans = await guild.bans.fetch({ limit, after, cache: false });
@@ -186,7 +219,7 @@ const tools = [
         user_id: ban.user.id, username: ban.user.tag, reason: ban.reason ?? null,
       }));
       const nextCursor = bans.size === limit ? bans.lastKey() ?? null : null;
-      return { content: [{ type: "text", text: JSON.stringify({ bans: result, nextCursor }, null, 2) }] };
+      return structured({ bans: result, nextCursor });
     },
   }),
   defineTool({

@@ -29,6 +29,29 @@ function toInputSchema(schema: z.ZodType): Record<string, unknown> {
 }
 
 /**
+ * Converts a zod schema into the JSON Schema MCP advertises as a tool's `outputSchema`.
+ * `io: "output"` emits the post-parse view; the `$schema` key is stripped (bare object
+ * schema). MCP requires an object root, so the schema must be a `z.object({...})`.
+ */
+function toOutputSchema(schema: z.ZodType): Record<string, unknown> {
+  const json = z.toJSONSchema(schema, { io: "output" }) as Record<string, unknown>;
+  delete json.$schema;
+  return json;
+}
+
+/**
+ * Builds a dual-output result: a human-readable JSON text block plus the same data
+ * as machine-readable `structuredContent`. Pass an object (wrap arrays as
+ * `{ items: [...] }`) so it conforms to the tool's object-root `outputSchema`.
+ */
+export function structured(data: Record<string, unknown>): ToolResult {
+  return {
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    structuredContent: data,
+  };
+}
+
+/**
  * A registered tool: its public metadata plus a `run` that validates raw args
  * with its zod schema before handing typed values to the handler.
  */
@@ -37,6 +60,7 @@ interface RegisteredTool {
   description: string;
   annotations?: ToolAnnotations;
   inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
   run(args: Record<string, unknown>): Promise<ToolResult>;
 }
 
@@ -44,20 +68,44 @@ interface RegisteredTool {
  * Declares one tool from a single source of truth: the zod `schema` derives the
  * client-facing `inputSchema` and validates incoming args, so `handle` receives
  * values already typed and checked — no `as` casts, no schema/handler drift.
+ * An optional `outputSchema` (a `z.object`) derives the advertised `outputSchema`
+ * and checks the handler's `structuredContent` against it on the way out. The check
+ * is non-fatal here, but conformance is a spec MUST and SDK clients reject
+ * non-conforming results — so a logged drift warning is a release blocker, not noise.
+ * A conforming result is normalised (unknown keys dropped) and its text block
+ * regenerated so both representations stay identical.
  */
 export function defineTool<S extends z.ZodType>(tool: {
   name: string;
   description: string;
   annotations?: ToolAnnotations;
   schema: S;
+  outputSchema?: z.ZodType;
   handle(args: z.infer<S>): Promise<ToolResult>;
 }): RegisteredTool {
+  const { outputSchema } = tool;
   return {
     name: tool.name,
     description: tool.description,
     annotations: tool.annotations,
     inputSchema: toInputSchema(tool.schema),
-    run: (args) => tool.handle(tool.schema.parse(args)),
+    outputSchema: outputSchema ? toOutputSchema(outputSchema) : undefined,
+    run: async (args) => {
+      const result = await tool.handle(tool.schema.parse(args));
+      if (outputSchema && result.structuredContent !== undefined) {
+        const parsed = outputSchema.safeParse(result.structuredContent);
+        if (parsed.success) {
+          result.structuredContent = parsed.data as Record<string, unknown>;
+          result.content = [{ type: "text", text: JSON.stringify(parsed.data, null, 2) }];
+        } else {
+          console.error(
+            `[${tool.name}] structuredContent does not match outputSchema:`,
+            parsed.error.issues,
+          );
+        }
+      }
+      return result;
+    },
   };
 }
 
@@ -73,6 +121,7 @@ export function defineModule(tools: RegisteredTool[]): ToolModule {
     description: t.description,
     annotations: t.annotations,
     inputSchema: t.inputSchema,
+    ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
   }));
 
   async function handle(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {

@@ -1,8 +1,27 @@
 import { z } from "zod";
 import { discord } from "../client.js";
-import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, intIn, structured } from "./define.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
+
+const inviteSummary = z.object({
+  code: z.string(),
+  url: z.string(),
+  channel_id: z.string().nullable(),
+  channel_name: z.string().nullable(),
+  inviter: z
+    .object({
+      id: z.string(),
+      username: z.string(),
+    })
+    .nullable(),
+  uses: z.number(),
+  max_uses: z.number(),
+  max_age: z.number(),
+  temporary: z.boolean(),
+  created_at: z.string().nullable(),
+  expires_at: z.string().nullable(),
+});
 
 function serializeInvite(invite: import("discord.js").Invite) {
   return {
@@ -32,11 +51,14 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
     }),
+    outputSchema: z.object({
+      invites: z.array(inviteSummary),
+    }),
     handle: async ({ guild_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const invites = await guild.invites.fetch();
       const list = [...invites.values()].map(serializeInvite);
-      return { content: [{ type: "text", text: JSON.stringify(list, null, 2) }] };
+      return structured({ invites: list });
     },
   }),
   defineTool({
@@ -47,11 +69,12 @@ const tools = [
     schema: z.object({
       invite_code: z.string().describe("The invite code, e.g. 'abc123'. A full discord.gg/abc123 URL is also accepted and stripped."),
     }),
+    outputSchema: inviteSummary,
     handle: async ({ invite_code }) => {
       const code = invite_code.replace(/^(https?:\/\/)?(discord\.gg\/)?/, "");
       if (!code) throw new Error("invite_code is required.");
       const invite = await discord.fetchInvite(code);
-      return { content: [{ type: "text", text: JSON.stringify(serializeInvite(invite), null, 2) }] };
+      return structured(serializeInvite(invite));
     },
   }),
   defineTool({
@@ -109,6 +132,9 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel to list invites for."),
     }),
+    outputSchema: z.object({
+      invites: z.array(inviteSummary),
+    }),
     handle: async ({ channel_id }) => {
       const channel = await discord.channels.fetch(channel_id);
       if (!channel || !("fetchInvites" in channel)) {
@@ -116,7 +142,7 @@ const tools = [
       }
       const invites = await channel.fetchInvites();
       const list = [...invites.values()].map(serializeInvite);
-      return { content: [{ type: "text", text: JSON.stringify(list, null, 2) }] };
+      return structured({ invites: list });
     },
   }),
 ];

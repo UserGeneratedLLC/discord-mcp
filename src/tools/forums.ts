@@ -1,9 +1,20 @@
 import { ChannelType, ForumChannel, ThreadChannel } from "discord.js";
 import { z } from "zod";
 import { discord } from "../client.js";
-import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, intIn, structured } from "./define.js";
 
 const threadId = snowflake.describe("ID (snowflake) of the forum post (thread).");
+
+/** Shape of a forum post (thread) summary, shared by the post getter and thread lister. */
+const threadSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  archived: z.boolean().nullable(),
+  locked: z.boolean().nullable(),
+  messageCount: z.number().nullable(),
+  appliedTags: z.array(z.string()),
+  createdAt: z.string().nullable(),
+});
 
 /**
  * Fetches a channel by ID and guarantees it is a forum channel.
@@ -35,6 +46,14 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
     }),
+    outputSchema: z.object({
+      channels: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        topic: z.string().nullable(),
+        parentId: z.string().nullable(),
+      })),
+    }),
     handle: async ({ guild_id }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const channels = await guild.channels.fetch();
@@ -46,7 +65,7 @@ const tools = [
           topic: (c as ForumChannel).topic,
           parentId: c!.parentId,
         }));
-      return { content: [{ type: "text", text: JSON.stringify(forums, null, 2) }] };
+      return structured({ channels: forums });
     },
   }),
   defineTool({
@@ -101,6 +120,14 @@ const tools = [
       thread_id: threadId.describe("ID (snowflake) of the forum post (thread)."),
       limit: intIn(1, 100).default(20).describe("How many recent messages to include (1–100). Default 20."),
     }),
+    outputSchema: threadSummary.extend({
+      messages: z.array(z.object({
+        id: z.string(),
+        author: z.string(),
+        content: z.string(),
+        timestamp: z.string(),
+      })),
+    }),
     handle: async ({ thread_id, limit }) => {
       const thread = await getThreadChannel(thread_id);
       const messages = await thread.messages.fetch({ limit });
@@ -111,7 +138,7 @@ const tools = [
         locked: thread.locked,
         messageCount: thread.messageCount,
         appliedTags: thread.appliedTags,
-        createdAt: thread.createdAt?.toISOString(),
+        createdAt: thread.createdAt?.toISOString() ?? null,
         messages: [...messages.values()]
           .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
           .map((m) => ({
@@ -121,7 +148,7 @@ const tools = [
             timestamp: m.createdAt.toISOString(),
           })),
       };
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+      return structured(result);
     },
   }),
   defineTool({
@@ -133,6 +160,11 @@ const tools = [
       forum_channel_id: snowflake.describe("ID (snowflake) of the forum channel to list posts from."),
       limit: intIn(1, 100).default(100).describe("Max archived posts per page (1–100). Default 100."),
       before: z.string().optional().describe("Pagination cursor: an ISO timestamp. Pass the previous response's nextBefore to fetch older archived posts. When set, active posts are omitted."),
+    }),
+    outputSchema: z.object({
+      threads: z.array(threadSummary),
+      hasMore: z.boolean(),
+      nextBefore: z.string().nullable(),
     }),
     handle: async ({ forum_channel_id, limit, before }) => {
       const forum = await getForumChannel(forum_channel_id);
@@ -151,11 +183,11 @@ const tools = [
         locked: t.locked,
         messageCount: t.messageCount,
         appliedTags: t.appliedTags,
-        createdAt: t.createdAt?.toISOString(),
+        createdAt: t.createdAt?.toISOString() ?? null,
       }));
       const lastArchived = archived.threads.last();
       const nextBefore = archived.hasMore ? lastArchived?.archivedAt?.toISOString() ?? null : null;
-      return { content: [{ type: "text", text: JSON.stringify({ threads, hasMore: archived.hasMore, nextBefore }, null, 2) }] };
+      return structured({ threads, hasMore: archived.hasMore, nextBefore });
     },
   }),
   defineTool({
@@ -196,6 +228,14 @@ const tools = [
     schema: z.object({
       forum_channel_id: snowflake.describe("ID (snowflake) of the forum channel to read tags from."),
     }),
+    outputSchema: z.object({
+      tags: z.array(z.object({
+        id: z.string(),
+        name: z.string(),
+        emoji: z.string().nullable(),
+        moderated: z.boolean(),
+      })),
+    }),
     handle: async ({ forum_channel_id }) => {
       const forum = await getForumChannel(forum_channel_id);
       const tags = forum.availableTags.map((t) => ({
@@ -204,7 +244,7 @@ const tools = [
         emoji: t.emoji?.name ?? null,
         moderated: t.moderated,
       }));
-      return { content: [{ type: "text", text: JSON.stringify(tags, null, 2) }] };
+      return structured({ tags });
     },
   }),
   defineTool({
