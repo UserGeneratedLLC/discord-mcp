@@ -45,7 +45,7 @@
     "url": "https://github.com/PaSympa/discord-mcp/issues"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

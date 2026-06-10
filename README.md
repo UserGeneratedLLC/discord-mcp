@@ -6,7 +6,7 @@
 
 [![npm](https://img.shields.io/npm/v/@pasympa/discord-mcp)](https://www.npmjs.com/package/@pasympa/discord-mcp)
 [![License](https://img.shields.io/github/license/PaSympa/discord-mcp)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D20-green)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%3E%3D22-green)](https://nodejs.org)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14-5865F2)](https://discord.js.org)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple)](https://modelcontextprotocol.io)
 
