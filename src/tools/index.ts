@@ -48,7 +48,7 @@ const allToolsets: Record<string, ToolModule> = {
  * case-insensitive; `all` or unset exposes everything). Unknown or empty selections
  * throw at startup: a typo must not silently expose the full destructive surface.
  */
-function selectModules(): ToolModule[] {
+export function selectModules(): ToolModule[] {
   const raw = process.env.DISCORD_MCP_TOOLSETS?.trim();
   if (!raw) return Object.values(allToolsets);
   const names = [
@@ -90,6 +90,11 @@ const registry: Map<string, ToolHandler> = (() => {
  */
 export function getAllDefinitions(): ToolDefinition[] {
   return modules.flatMap((m) => m.definitions);
+}
+
+/** True if a tool with this name is registered (and not gated off). */
+export function hasTool(name: string): boolean {
+  return registry.has(name);
 }
 
 /**

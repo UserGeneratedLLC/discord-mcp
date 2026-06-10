@@ -101,7 +101,7 @@ test("structuredContent conforming to outputSchema is normalised; extra keys are
   assert.deepEqual(res.structuredContent, { id: "1" });
 });
 
-test("non-conforming structuredContent is left intact instead of throwing", async () => {
+test("non-conforming structuredContent becomes an isError result, never ships", async () => {
   const mod = defineModule([
     defineTool({
       name: "t_bad",
@@ -111,9 +111,9 @@ test("non-conforming structuredContent is left intact instead of throwing", asyn
       handle: async () => structured({ id: 42 }),
     }),
   ]);
-  // safeParse fails (id is a number), so the handler still returns the raw data — no throw.
   const res = await mod.handlers.get("t_bad")!({});
-  assert.deepEqual(res.structuredContent, { id: 42 });
+  assert.equal(res.isError, true);
+  assert.equal(res.structuredContent, undefined);
 });
 
 test("defineModule throws on duplicate tool names within a module", () => {

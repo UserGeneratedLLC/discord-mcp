@@ -177,17 +177,17 @@ The server loads `.env` automatically via `dotenv`.
 
 ### Environment variables
 
-| Variable                  | Default | Description                                                                                                 |
-| ------------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
-| `DISCORD_TOKEN`           | —       | **Required.** Bot token.                                                                                    |
-| `DISCORD_MESSAGE_CONTENT` | `true`  | Set to `false` to stop requesting the Message Content privileged gateway intent at connect time.            |
-| `DISCORD_GUILD_MEMBERS`   | `true`  | Set to `false` to stop requesting the Server Members privileged gateway intent at connect time.             |
-| `DISCORD_MCP_TOOLSETS`    | `all`   | Comma-separated list of toolsets to expose, to keep the tool list small. Unset or `all` exposes every tool. |
+| Variable                  | Default | Description                                                                                                                                                                      |
+| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`           | —       | **Required.** Bot token.                                                                                                                                                         |
+| `DISCORD_MESSAGE_CONTENT` | `true`  | Set to `false` to stop requesting the Message Content privileged gateway intent at connect time.                                                                                 |
+| `DISCORD_GUILD_MEMBERS`   | `true`  | Set to `false` to stop requesting the Server Members privileged gateway intent at connect time.                                                                                  |
+| `DISCORD_MCP_TOOLSETS`    | `all`   | Comma-separated list of toolsets to expose, to keep the tool list small. Unset or `all` exposes every tool.                                                                      |
 | `DISCORD_ALLOWED_GUILDS`  | all     | Comma-separated guild IDs the server may act on. When set, tool calls targeting any other guild are rejected — whether addressed by guild ID, channel ID, thread ID, or webhook. |
 
 These flags only control which gateway intents the server requests when identifying. Requesting a privileged intent that is **not** enabled in the Developer Portal makes the connection fail at startup (close code `4014`) — set the flag to `false` to connect anyway.
 
-Data access is governed by the **portal toggles**, not by these flags: this server reads everything over the REST API, which Discord gates on the portal setting alone. So with the portal toggles on, setting these flags to `false` loses nothing. With a portal toggle **off**, the corresponding data is restricted regardless of the flags: message bodies come back empty (`content`, `embeds`, `attachments`) and member listing fails — enable the toggle in the portal to restore it.
+Data access is governed by the **portal toggles**, not by these flags: this server reads everything over the REST API, which Discord gates on the portal setting alone. So with the portal toggles on, setting these flags to `false` loses nothing. With a portal toggle **off**, the corresponding data is restricted regardless of the flags: message bodies come back empty (`content`, `embeds`, `attachments` — except the bot's own messages, DMs, and messages that mention the bot) and member listing fails — enable the toggle in the portal to restore it.
 
 **Toolsets** (`DISCORD_MCP_TOOLSETS`): `discovery`, `messages`, `channels`, `permissions`, `members`, `roles`, `moderation`, `screening`, `stats`, `forums`, `webhooks`, `scheduled_events`, `invites`, `dm`. Example — read-only navigation only: `DISCORD_MCP_TOOLSETS=discovery,messages,members`. Only the listed toolsets' tools are advertised and callable. Unknown names make the server fail at startup instead of silently exposing everything.
 
