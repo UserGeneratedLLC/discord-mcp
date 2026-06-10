@@ -45,7 +45,10 @@ function toOutputSchema(schema: z.ZodType): Record<string, unknown> {
  * `{ items: [...] }`) so it conforms to the tool's object-root `outputSchema`.
  */
 export function structured(data: Record<string, unknown>): ToolResult {
-  return { content: [{ type: "text", text: JSON.stringify(data, null, 2) }], structuredContent: data };
+  return {
+    content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
+    structuredContent: data,
+  };
 }
 
 /**
@@ -67,9 +70,10 @@ interface RegisteredTool {
  * values already typed and checked — no `as` casts, no schema/handler drift.
  * An optional `outputSchema` (a `z.object`) derives the advertised `outputSchema`
  * and checks the handler's `structuredContent` against it on the way out. The check
- * is non-fatal: a conforming result is normalised (unknown keys dropped), a
- * non-conforming one is left untouched and a warning is logged — so a schema bug
- * never turns a working tool into a runtime error, while drift stays visible in dev.
+ * is non-fatal here, but conformance is a spec MUST and SDK clients reject
+ * non-conforming results — so a logged drift warning is a release blocker, not noise.
+ * A conforming result is normalised (unknown keys dropped) and its text block
+ * regenerated so both representations stay identical.
  */
 export function defineTool<S extends z.ZodType>(tool: {
   name: string;
@@ -92,8 +96,12 @@ export function defineTool<S extends z.ZodType>(tool: {
         const parsed = outputSchema.safeParse(result.structuredContent);
         if (parsed.success) {
           result.structuredContent = parsed.data as Record<string, unknown>;
+          result.content = [{ type: "text", text: JSON.stringify(parsed.data, null, 2) }];
         } else {
-          console.error(`[${tool.name}] structuredContent does not match outputSchema:`, parsed.error.issues);
+          console.error(
+            `[${tool.name}] structuredContent does not match outputSchema:`,
+            parsed.error.issues,
+          );
         }
       }
       return result;
