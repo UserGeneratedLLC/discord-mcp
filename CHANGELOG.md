@@ -1,5 +1,25 @@
 # Changelog
 
+## [Unreleased — 2.0.0]
+
+### Breaking
+
+- Every tool input is validated by a zod schema that also derives the advertised `inputSchema` (single source of truth). Numeric inputs are strictly bounded: out-of-range, non-integer, or string numbers are rejected with a clear error instead of being coerced/clamped
+- Embed and role colors are hex-only (`#RRGGBB`); named colors ("Red") and raw integers are rejected
+- All URL inputs must be `http(s)` (`javascript:`, `ftp:`, … rejected); the constraint is advertised as a `pattern` in the schema
+- Scheduled-event datetimes must be ISO 8601 with an explicit offset or `Z`; offset-less strings are rejected, and event `entity_type`/`status` enums are case-sensitive uppercase (`status` no longer accepts `SCHEDULED` — no transition back to it exists)
+- `discord_delete_channel` and `discord_bulk_delete_messages` are safe-by-default: `dry_run` defaults to `true` (advertised in the schema), so existing callers preview instead of deleting until they pass `dry_run:false`. The bulk-delete dry run reports the real deletable count (14-day rule applied)
+- Unknown tool names and unexpected `tools/list` cursors are JSON-RPC protocol errors (`-32602`) instead of `isError` results, and validation failures surface as `Invalid arguments — field: message`
+- Read tools (32) now advertise `outputSchema` and return `structuredContent`; conforming outputs are normalised (unknown keys dropped) and non-conforming output is converted to an error instead of being shipped. `discord_fetch_webhook_message` `timestamp` is an ISO string (was mistyped as a number)
+- The `events` toolset is renamed `scheduled_events`
+
+### Added
+
+- `DISCORD_MCP_TOOLSETS`: expose only selected toolsets (comma-separated, case-insensitive, `all` keyword). Unknown names abort startup instead of silently exposing all 97 tools
+- `DISCORD_ALLOWED_GUILDS`: guild allow-list enforced at the schema for `guild_id` inputs AND centrally on every channel/thread/webhook/invite fetch, so channel-addressed calls cannot bypass it (token-webhook flows verify the webhook's guild when the list is active)
+- `DISCORD_MESSAGE_CONTENT` / `DISCORD_GUILD_MEMBERS`: opt out of the privileged gateway intents at connect time (avoids the 4014 startup failure when the portal toggles are off; REST data access is governed by the portal toggles alone)
+- O(1) tool dispatch with duplicate-name detection at load (cross-module and within-module)
+
 ## [1.7.2] - 2026-06-10
 
 ### Fixed
