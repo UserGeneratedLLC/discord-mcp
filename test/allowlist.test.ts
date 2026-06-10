@@ -27,19 +27,42 @@ test("fetchChannelChecked passes an allowed channel and guild-less objects throu
   assert.ok(await fetchChannelChecked("333333333333333333"));
 });
 
-test("token-webhook flows are gated when the allow-list is active", async () => {
-  process.env.DISCORD_ALLOWED_GUILDS = ALLOWED;
-  mock.method(discord, "fetchWebhook", async () => ({ guildId: FOREIGN }) as never);
-  await assert.rejects(
-    () =>
-      webhooks.handlers.get("discord_send_webhook_message")!({
-        webhook_id: "333333333333333333",
-        webhook_token: "tok",
-        content: "x",
-      }),
-    /allow-list/,
-  );
-});
+const TOKEN_WEBHOOK_CALLS: [string, Record<string, unknown>][] = [
+  ["discord_send_webhook_message", { content: "x" }],
+  ["discord_edit_webhook_message", { message_id: "444444444444444444", content: "x" }],
+  ["discord_delete_webhook_message", { message_id: "444444444444444444" }],
+  ["discord_fetch_webhook_message", { message_id: "444444444444444444" }],
+];
+
+for (const [tool, extra] of TOKEN_WEBHOOK_CALLS) {
+  test(`${tool} is gated when the allow-list is active`, async () => {
+    process.env.DISCORD_ALLOWED_GUILDS = ALLOWED;
+    mock.method(discord, "fetchWebhook", async () => ({ guildId: FOREIGN }) as never);
+    await assert.rejects(
+      () =>
+        webhooks.handlers.get(tool)!({
+          webhook_id: "333333333333333333",
+          webhook_token: "tok",
+          ...extra,
+        }),
+      /allow-list/,
+    );
+  });
+
+  test(`${tool} fails closed when the webhook has no resolvable guild`, async () => {
+    process.env.DISCORD_ALLOWED_GUILDS = ALLOWED;
+    mock.method(discord, "fetchWebhook", async () => ({}) as never);
+    await assert.rejects(
+      () =>
+        webhooks.handlers.get(tool)!({
+          webhook_id: "333333333333333333",
+          webhook_token: "tok",
+          ...extra,
+        }),
+      /no resolvable guild/,
+    );
+  });
+}
 
 test("no tool module bypasses the checked channel fetch", () => {
   const dir = join(__dirname, "..", "src", "tools");
@@ -48,6 +71,10 @@ test("no tool module bypasses the checked channel fetch", () => {
     assert.ok(
       !/discord\.channels\.fetch/.test(src),
       `${file} calls discord.channels.fetch directly — use fetchChannelChecked/getTextChannel/getGuildChannel`,
+    );
+    assert.ok(
+      !/guild_id:\s*snowflake\b/.test(src),
+      `${file} declares a raw guild_id: snowflake input — use the allow-list-enforcing guildId fragment`,
     );
   }
 });

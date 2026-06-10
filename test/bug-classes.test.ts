@@ -1,6 +1,6 @@
 import { test, mock, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { ChannelType } from "discord.js";
+import { ChannelType, Routes } from "discord.js";
 import { discord } from "../src/client.js";
 import { parsePermissionNames } from "../src/client.js";
 import messages from "../src/tools/messages.js";
@@ -46,6 +46,7 @@ test("delete_message sends the audit-log reason through the raw REST route", asy
     reason: "spam cleanup",
   });
   assert.equal(restCalls.length, 1);
+  assert.equal(restCalls[0][0], Routes.channelMessage(CHANNEL, MESSAGE));
   assert.deepEqual(restCalls[0][1], { reason: "spam cleanup" });
 });
 

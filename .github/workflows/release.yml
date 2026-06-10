@@ -9,7 +9,8 @@ jobs:
   publish-npm:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
@@ -29,7 +30,7 @@ jobs:
       - run: npm run lint
       - run: npm run build
       - run: npm test
-      - run: npm publish --access public
+      - run: npm publish --access public --provenance
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -41,9 +42,11 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v6
-      - name: Install mcp-publisher
+      - name: Install mcp-publisher (pinned + checksum-verified)
         run: |
-          curl -L "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/').tar.gz" | tar xz mcp-publisher
+          curl -fsSLo mcp-publisher.tar.gz "https://github.com/modelcontextprotocol/registry/releases/download/v1.7.9/mcp-publisher_linux_amd64.tar.gz"
+          echo "ab128162b0616090b47cf245afe0a23f3ef08936fdce19074f5ba0a4469281ac  mcp-publisher.tar.gz" | sha256sum -c -
+          tar xzf mcp-publisher.tar.gz mcp-publisher
       - name: Authenticate to MCP Registry
         run: ./mcp-publisher login github-oidc
       - name: Publish server to MCP Registry
@@ -59,6 +62,8 @@ jobs:
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v4
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -66,6 +71,7 @@ jobs:
       - uses: docker/build-push-action@v7
         with:
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             pasympa/discord-mcp:${{ steps.version.outputs.VERSION }}
             pasympa/discord-mcp:latest

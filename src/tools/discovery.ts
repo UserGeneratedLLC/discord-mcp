@@ -1,6 +1,6 @@
 import { ChannelType, CategoryChannel, GuildChannel } from "discord.js";
 import { z } from "zod";
-import { discord } from "../client.js";
+import { discord, isGuildAllowed } from "../client.js";
 import { defineTool, defineModule, guildId, structured } from "./define.js";
 
 const guildSummary = z.object({
@@ -26,12 +26,14 @@ const tools = [
     schema: z.object({}),
     outputSchema: z.object({ guilds: z.array(guildSummary) }),
     handle: async () => {
-      const guilds = discord.guilds.cache.map((g) => ({
-        id: g.id,
-        name: g.name,
-        memberCount: g.memberCount,
-        icon: g.iconURL(),
-      }));
+      const guilds = discord.guilds.cache
+        .filter((g) => isGuildAllowed(g.id))
+        .map((g) => ({
+          id: g.id,
+          name: g.name,
+          memberCount: g.memberCount,
+          icon: g.iconURL(),
+        }));
       return structured({ guilds });
     },
   }),

@@ -199,8 +199,8 @@ const tools = [
       limit: intIn(1, 100)
         .default(100)
         .describe("Max archived posts per page (1–100). Default 100."),
-      before: z
-        .string()
+      before: z.iso
+        .datetime({ offset: true })
         .optional()
         .describe(
           "Pagination cursor: an ISO timestamp. Pass the previous response's nextBefore to fetch older archived posts. When set, active posts are omitted.",
