@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { discord } from "../client.js";
+import { discord, fetchChannelChecked } from "../client.js";
 import { defineTool, defineModule, snowflake, guildId, intIn, structured } from "./define.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ const tools = [
       temporary: z.boolean().optional().describe("If true, members who join via this invite are removed when they disconnect (unless they get a role). Default false."),
     }),
     handle: async ({ channel_id, max_age, max_uses, unique, temporary }) => {
-      const channel = await discord.channels.fetch(channel_id);
+      const channel = await fetchChannelChecked(channel_id);
       if (!channel || !("createInvite" in channel)) {
         throw new Error(`Channel ${channel_id} does not support invites.`);
       }
@@ -136,7 +136,7 @@ const tools = [
       invites: z.array(inviteSummary),
     }),
     handle: async ({ channel_id }) => {
-      const channel = await discord.channels.fetch(channel_id);
+      const channel = await fetchChannelChecked(channel_id);
       if (!channel || !("fetchInvites" in channel)) {
         throw new Error(`Channel ${channel_id} does not support invites.`);
       }

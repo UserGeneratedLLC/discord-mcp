@@ -1,8 +1,22 @@
-import { GuildScheduledEventEntityType, GuildScheduledEventPrivacyLevel, GuildScheduledEventStatus, type GuildScheduledEventCreateOptions, type GuildScheduledEventEditOptions } from "discord.js";
+import {
+  GuildScheduledEventEntityType,
+  GuildScheduledEventPrivacyLevel,
+  GuildScheduledEventStatus,
+  type GuildScheduledEventCreateOptions,
+  type GuildScheduledEventEditOptions,
+} from "discord.js";
 import { z } from "zod";
 import { discord } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
-import { defineTool, defineModule, snowflake, guildId, intIn, structured } from "./define.js";
+import {
+  defineTool,
+  defineModule,
+  snowflake,
+  guildId,
+  httpUrl,
+  intIn,
+  structured,
+} from "./define.js";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -112,25 +126,69 @@ const tools = [
     name: "discord_create_scheduled_event",
     description:
       "Create a scheduled event. For 'VOICE'/'STAGE_INSTANCE' events provide channel_id; for 'EXTERNAL' events provide location AND scheduled_end_time. Requires the Manage Events permission. Returns the new event's name and ID.",
-    annotations: { title: "Create scheduled event", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Create scheduled event",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       name: z.string().describe("Event name (max 100 characters)."),
-      description: z.string().optional().describe("Optional event description (max 1000 characters)."),
-      entity_type: z.enum(["VOICE", "STAGE_INSTANCE", "EXTERNAL"]).describe("Where the event happens: 'VOICE' or 'STAGE_INSTANCE' (needs channel_id), or 'EXTERNAL' (needs location + scheduled_end_time)."),
-      scheduled_start_time: z.string().describe("Event start as an ISO 8601 datetime, e.g. '2026-06-01T20:00:00Z'. Must be in the future."),
-      scheduled_end_time: z.string().optional().describe("Event end as an ISO 8601 datetime. Required for EXTERNAL events."),
-      channel_id: snowflake.optional().describe("Voice or stage channel ID (snowflake). Required for VOICE/STAGE_INSTANCE events."),
-      location: z.string().optional().describe("Free-text location (e.g. a URL or place). Required for EXTERNAL events."),
-      image: z.string().optional().describe("Optional cover image URL."),
+      description: z
+        .string()
+        .optional()
+        .describe("Optional event description (max 1000 characters)."),
+      entity_type: z
+        .enum(["VOICE", "STAGE_INSTANCE", "EXTERNAL"])
+        .describe(
+          "Where the event happens: 'VOICE' or 'STAGE_INSTANCE' (needs channel_id), or 'EXTERNAL' (needs location + scheduled_end_time).",
+        ),
+      scheduled_start_time: z.iso
+        .datetime({ offset: true })
+        .describe(
+          "Event start as an ISO 8601 datetime, e.g. '2026-06-01T20:00:00Z'. Must be in the future.",
+        ),
+      scheduled_end_time: z.iso
+        .datetime({ offset: true })
+        .optional()
+        .describe("Event end as an ISO 8601 datetime. Required for EXTERNAL events."),
+      channel_id: snowflake
+        .optional()
+        .describe(
+          "Voice or stage channel ID (snowflake). Required for VOICE/STAGE_INSTANCE events.",
+        ),
+      location: z
+        .string()
+        .optional()
+        .describe("Free-text location (e.g. a URL or place). Required for EXTERNAL events."),
+      image: httpUrl.optional().describe("Optional cover image URL."),
     }),
-    handle: async ({ guild_id, name, description, entity_type, scheduled_start_time, scheduled_end_time, channel_id, location, image }) => {
+    handle: async ({
+      guild_id,
+      name,
+      description,
+      entity_type,
+      scheduled_start_time,
+      scheduled_end_time,
+      channel_id,
+      location,
+      image,
+    }) => {
       const guild = await discord.guilds.fetch(guild_id);
 
       const entityType = ENTITY_TYPE_MAP[entity_type];
-      if (!entityType) throw new Error(`Invalid entity_type: "${entity_type}". Must be VOICE, STAGE_INSTANCE, or EXTERNAL.`);
+      if (!entityType)
+        throw new Error(
+          `Invalid entity_type: "${entity_type}". Must be VOICE, STAGE_INSTANCE, or EXTERNAL.`,
+        );
 
-      if ((entityType === GuildScheduledEventEntityType.Voice || entityType === GuildScheduledEventEntityType.StageInstance) && !channel_id) {
+      if (
+        (entityType === GuildScheduledEventEntityType.Voice ||
+          entityType === GuildScheduledEventEntityType.StageInstance) &&
+        !channel_id
+      ) {
         throw new Error("channel_id is required for VOICE or STAGE_INSTANCE events.");
       }
       if (entityType === GuildScheduledEventEntityType.External && !location) {
@@ -152,9 +210,13 @@ const tools = [
       if (location) options.entityMetadata = { location };
       if (image) options.image = image;
 
-      const event = await guild.scheduledEvents.create(options as unknown as GuildScheduledEventCreateOptions);
+      const event = await guild.scheduledEvents.create(
+        options as unknown as GuildScheduledEventCreateOptions,
+      );
       return {
-        content: [{ type: "text", text: `✅ Scheduled event "${event.name}" created (id: ${event.id}).` }],
+        content: [
+          { type: "text", text: `✅ Scheduled event "${event.name}" created (id: ${event.id}).` },
+        ],
       };
     },
   }),
@@ -162,20 +224,50 @@ const tools = [
     name: "discord_edit_scheduled_event",
     description:
       "Update a scheduled event; only provided fields change. Use the status field to start ('ACTIVE'), end ('COMPLETED'), or cancel ('CANCELED') an event — note Discord only allows certain status transitions. Requires the Manage Events permission.",
-    annotations: { title: "Edit scheduled event", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Edit scheduled event",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       event_id: snowflake.describe("ID (snowflake) of the event to edit."),
       name: z.string().optional().describe("New event name (max 100 characters)."),
       description: z.string().optional().describe("New event description (max 1000 characters)."),
-      scheduled_start_time: z.string().optional().describe("New start time as an ISO 8601 datetime."),
-      scheduled_end_time: z.string().optional().describe("New end time as an ISO 8601 datetime."),
-      channel_id: snowflake.optional().describe("New voice/stage channel ID (snowflake) for VOICE/STAGE_INSTANCE events."),
+      scheduled_start_time: z.iso
+        .datetime({ offset: true })
+        .optional()
+        .describe("New start time as an ISO 8601 datetime."),
+      scheduled_end_time: z.iso
+        .datetime({ offset: true })
+        .optional()
+        .describe("New end time as an ISO 8601 datetime."),
+      channel_id: snowflake
+        .optional()
+        .describe("New voice/stage channel ID (snowflake) for VOICE/STAGE_INSTANCE events."),
       location: z.string().optional().describe("New free-text location for EXTERNAL events."),
-      image: z.string().optional().describe("New cover image URL."),
-      status: z.enum(["SCHEDULED", "ACTIVE", "COMPLETED", "CANCELED"]).optional().describe("Change event status. Allowed transitions only: SCHEDULED→ACTIVE→COMPLETED, or SCHEDULED→CANCELED."),
+      image: httpUrl.optional().describe("New cover image URL."),
+      status: z
+        .enum(["SCHEDULED", "ACTIVE", "COMPLETED", "CANCELED"])
+        .optional()
+        .describe(
+          "Change event status. Allowed transitions only: SCHEDULED→ACTIVE→COMPLETED, or SCHEDULED→CANCELED.",
+        ),
     }),
-    handle: async ({ guild_id, event_id, name, description, scheduled_start_time, scheduled_end_time, channel_id, location, image, status }) => {
+    handle: async ({
+      guild_id,
+      event_id,
+      name,
+      description,
+      scheduled_start_time,
+      scheduled_end_time,
+      channel_id,
+      location,
+      image,
+      status,
+    }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const event = await guild.scheduledEvents.fetch(event_id);
 
@@ -189,7 +281,10 @@ const tools = [
       if (image) options.image = image;
       if (status) {
         const statusVal = STATUS_MAP[status];
-        if (!statusVal) throw new Error(`Invalid status: "${status}". Must be SCHEDULED, ACTIVE, COMPLETED, or CANCELED.`);
+        if (!statusVal)
+          throw new Error(
+            `Invalid status: "${status}". Must be SCHEDULED, ACTIVE, COMPLETED, or CANCELED.`,
+          );
         options.status = statusVal;
       }
 
@@ -202,7 +297,12 @@ const tools = [
         >,
       );
       return {
-        content: [{ type: "text", text: `✅ Scheduled event "${updated.name}" updated (id: ${updated.id}).` }],
+        content: [
+          {
+            type: "text",
+            text: `✅ Scheduled event "${updated.name}" updated (id: ${updated.id}).`,
+          },
+        ],
       };
     },
   }),
@@ -210,7 +310,13 @@ const tools = [
     name: "discord_delete_scheduled_event",
     description:
       "Permanently delete a scheduled event. IRREVERSIBLE. To cancel an event while keeping a record, use discord_edit_scheduled_event with status:'CANCELED' instead. Requires the Manage Events permission.",
-    annotations: { title: "Delete scheduled event", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Delete scheduled event",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       event_id: snowflake.describe("ID (snowflake) of the event to delete."),
@@ -220,7 +326,9 @@ const tools = [
       const event = await guild.scheduledEvents.fetch(event_id);
       await event.delete();
       return {
-        content: [{ type: "text", text: `✅ Scheduled event "${event.name}" deleted (id: ${event_id}).` }],
+        content: [
+          { type: "text", text: `✅ Scheduled event "${event.name}" deleted (id: ${event_id}).` },
+        ],
       };
     },
   }),
@@ -232,8 +340,14 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
       event_id: snowflake.describe("ID (snowflake) of the scheduled event."),
-      limit: intIn(1, MAX_FETCH_LIMIT).default(DEFAULTS.LIMIT).describe("Max subscribers per page (1–100). Default 25."),
-      after: snowflake.optional().describe("Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page."),
+      limit: intIn(1, MAX_FETCH_LIMIT)
+        .default(DEFAULTS.LIMIT)
+        .describe("Max subscribers per page (1–100). Default 25."),
+      after: snowflake
+        .optional()
+        .describe(
+          "Pagination cursor: a user ID (snowflake). Pass the previous response's nextCursor to fetch the next page.",
+        ),
     }),
     outputSchema: z.object({
       subscribers: z.array(subscriberSummary),
@@ -248,7 +362,7 @@ const tools = [
         username: sub.user.username,
         avatar: sub.user.displayAvatarURL(),
       }));
-      const nextCursor = subscribers.size === limit ? subscribers.lastKey() ?? null : null;
+      const nextCursor = subscribers.size === limit ? (subscribers.lastKey() ?? null) : null;
       return structured({ subscribers: list, nextCursor });
     },
   }),
@@ -256,13 +370,29 @@ const tools = [
     name: "discord_create_event_invite",
     description:
       "Create a shareable invite URL that points to a scheduled event, so recipients land on the event when joining. Requires the Create Instant Invite permission. Returns the invite URL.",
-    annotations: { title: "Create event invite", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Create event invite",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       event_id: snowflake.describe("ID (snowflake) of the scheduled event to link the invite to."),
-      channel_id: snowflake.optional().describe("Channel (snowflake) the invite points to. Defaults to the server's first text channel if omitted."),
-      max_age: intIn(0, 604800).default(86400).describe("Invite lifetime in seconds, 0–604800 (7 days); 0 means it never expires. Default 86400 (24h)."),
-      max_uses: intIn(0, 100).default(0).describe("Maximum number of uses, 0–100; 0 means unlimited. Default 0."),
+      channel_id: snowflake
+        .optional()
+        .describe(
+          "Channel (snowflake) the invite points to. Defaults to the server's first text channel if omitted.",
+        ),
+      max_age: intIn(0, 604800)
+        .default(86400)
+        .describe(
+          "Invite lifetime in seconds, 0–604800 (7 days); 0 means it never expires. Default 86400 (24h).",
+        ),
+      max_uses: intIn(0, 100)
+        .default(0)
+        .describe("Maximum number of uses, 0–100; 0 means unlimited. Default 0."),
     }),
     handle: async ({ guild_id, event_id, channel_id, max_age, max_uses }) => {
       const guild = await discord.guilds.fetch(guild_id);

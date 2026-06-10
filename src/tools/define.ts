@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isGuildAllowed } from "../client.js";
 import type { ToolModule, ToolDefinition, ToolResult, ToolAnnotations } from "./types.js";
 
 /** A Discord snowflake ID: a 17–20 digit string. Reused by every tool that takes an ID. */
@@ -6,8 +7,13 @@ export const snowflake = z
   .string()
   .regex(/^\d{17,20}$/, "Must be a Discord snowflake ID (17-20 digits).");
 
-/** The `guild_id` field, identical across nearly every guild-scoped tool. */
-export const guildId = snowflake.describe("Discord server (guild) ID (snowflake).");
+/**
+ * The `guild_id` field, identical across nearly every guild-scoped tool. When
+ * `DISCORD_ALLOWED_GUILDS` is set, ids outside the allow-list are rejected at parse time.
+ */
+export const guildId = snowflake
+  .refine(isGuildAllowed, "guild_id is not in the DISCORD_ALLOWED_GUILDS allow-list.")
+  .describe("Discord server (guild) ID (snowflake).");
 
 /**
  * A bounded integer field: rejects non-integers and out-of-range values at parse
@@ -16,6 +22,12 @@ export const guildId = snowflake.describe("Discord server (guild) ID (snowflake)
  * `.default(n)` for an optional field with a default, or `.optional()` for one with none.
  */
 export const intIn = (min: number, max: number) => z.int().min(min).max(max);
+
+/**
+ * An http(s)-only URL. Bare `z.url()` accepts any WHATWG scheme (javascript:,
+ * ftp:, mailto:…) that Discord rejects for clickable/image links.
+ */
+export const httpUrl = z.url({ protocol: /^https?$/ });
 
 /**
  * Converts a zod schema into the JSON Schema shape MCP sends over the wire.
@@ -110,12 +122,11 @@ export function defineTool<S extends z.ZodType>(tool: {
 }
 
 /**
- * Assembles a list of {@link defineTool} tools into a {@link ToolModule}, exposing
- * their definitions and routing a call to the matching tool (or `null` if none owns
- * the name, per the module contract). Validation runs inside each tool's `run`.
+ * Assembles a list of {@link defineTool} tools into a {@link ToolModule}: their
+ * client-facing definitions and a name→handler map the registry merges for O(1)
+ * dispatch. Validation runs inside each tool's `run`.
  */
 export function defineModule(tools: RegisteredTool[]): ToolModule {
-  const byName = new Map(tools.map((t) => [t.name, t]));
   const definitions: ToolDefinition[] = tools.map((t) => ({
     name: t.name,
     description: t.description,
@@ -123,11 +134,10 @@ export function defineModule(tools: RegisteredTool[]): ToolModule {
     inputSchema: t.inputSchema,
     ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
   }));
-
-  async function handle(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
-    const tool = byName.get(name);
-    return tool ? tool.run(args) : null;
+  const handlers = new Map<string, RegisteredTool["run"]>();
+  for (const t of tools) {
+    if (handlers.has(t.name)) throw new Error(`Duplicate tool name in module: ${t.name}`);
+    handlers.set(t.name, t.run);
   }
-
-  return { definitions, handle };
+  return { definitions, handlers };
 }

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { ZodError, z } from "zod";
-import { snowflake, defineTool, defineModule, structured } from "../src/tools/define.js";
+import { snowflake, guildId, defineTool, defineModule, structured } from "../src/tools/define.js";
 import messages from "../src/tools/messages.js";
 
 const VALID_ID = "123456789012345678";
@@ -26,22 +26,27 @@ test("derived inputSchema is a bare object schema with no $schema key", () => {
 
 test("field descriptions propagate from .describe() into the inputSchema", () => {
   const send = messages.definitions.find((d) => d.name === "discord_send_message");
-  const props = (send!.inputSchema as { properties: Record<string, { description?: string }> }).properties;
+  const props = (send!.inputSchema as { properties: Record<string, { description?: string }> })
+    .properties;
   assert.match(props.content.description ?? "", /Plain-text body/);
 });
 
 test("handle rejects invalid args before reaching the Discord API", async () => {
   // A malformed channel_id fails zod validation synchronously, with no network call.
-  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: "bad" }), ZodError);
+  await assert.rejects(
+    () => messages.handlers.get("discord_read_messages")!({ channel_id: "bad" }),
+    ZodError,
+  );
 });
 
-test("handle returns null for a tool it does not own", async () => {
-  assert.equal(await messages.handle("discord_not_a_messages_tool", {}), null);
+test("a module exposes no handler for a tool it does not own", () => {
+  assert.equal(messages.handlers.get("discord_not_a_messages_tool"), undefined);
 });
 
 test("bounded integer fields advertise integer + min/max + default in the inputSchema", () => {
   const read = messages.definitions.find((d) => d.name === "discord_read_messages");
-  const limit = (read!.inputSchema as { properties: Record<string, Record<string, unknown>> }).properties.limit;
+  const limit = (read!.inputSchema as { properties: Record<string, Record<string, unknown>> })
+    .properties.limit;
   assert.equal(limit.type, "integer");
   assert.equal(limit.minimum, 1);
   assert.equal(limit.maximum, 100);
@@ -50,9 +55,10 @@ test("bounded integer fields advertise integer + min/max + default in the inputS
 
 test("handle rejects out-of-range and non-integer numbers before reaching the Discord API", async () => {
   // Valid channel_id, but the bound/integer check on limit fails synchronously with no network call.
-  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 500 }), ZodError);
-  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 0 }), ZodError);
-  await assert.rejects(() => messages.handle("discord_read_messages", { channel_id: VALID_ID, limit: 3.7 }), ZodError);
+  const readMessages = messages.handlers.get("discord_read_messages")!;
+  await assert.rejects(() => readMessages({ channel_id: VALID_ID, limit: 500 }), ZodError);
+  await assert.rejects(() => readMessages({ channel_id: VALID_ID, limit: 0 }), ZodError);
+  await assert.rejects(() => readMessages({ channel_id: VALID_ID, limit: 3.7 }), ZodError);
 });
 
 test("structured() mirrors data into both a text block and structuredContent", () => {
@@ -75,7 +81,10 @@ test("outputSchema is derived (object root) and exposed on the definition", () =
   const schema = mod.definitions[0].outputSchema as Record<string, unknown>;
   assert.equal(schema.type, "object");
   assert.ok(!("$schema" in schema), "$schema must be stripped from outputSchema");
-  assert.ok((schema.properties as Record<string, unknown>).items, "output properties derived from the zod schema");
+  assert.ok(
+    (schema.properties as Record<string, unknown>).items,
+    "output properties derived from the zod schema",
+  );
 });
 
 test("structuredContent conforming to outputSchema is normalised; extra keys are dropped", async () => {
@@ -88,8 +97,8 @@ test("structuredContent conforming to outputSchema is normalised; extra keys are
       handle: async () => structured({ id: "1", extra: "dropped" }),
     }),
   ]);
-  const res = await mod.handle("t_norm", {});
-  assert.deepEqual(res!.structuredContent, { id: "1" });
+  const res = await mod.handlers.get("t_norm")!({});
+  assert.deepEqual(res.structuredContent, { id: "1" });
 });
 
 test("non-conforming structuredContent is left intact instead of throwing", async () => {
@@ -103,6 +112,28 @@ test("non-conforming structuredContent is left intact instead of throwing", asyn
     }),
   ]);
   // safeParse fails (id is a number), so the handler still returns the raw data — no throw.
-  const res = await mod.handle("t_bad", {});
-  assert.deepEqual(res!.structuredContent, { id: 42 });
+  const res = await mod.handlers.get("t_bad")!({});
+  assert.deepEqual(res.structuredContent, { id: 42 });
+});
+
+test("defineModule throws on duplicate tool names within a module", () => {
+  const dup = () =>
+    defineTool({
+      name: "t_dup",
+      description: "x",
+      schema: z.object({}),
+      handle: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+  assert.throws(() => defineModule([dup(), dup()]), /Duplicate tool name in module: t_dup/);
+});
+
+test("guildId enforces DISCORD_ALLOWED_GUILDS lazily", () => {
+  process.env.DISCORD_ALLOWED_GUILDS = "111111111111111111";
+  try {
+    assert.ok(guildId.safeParse("111111111111111111").success);
+    assert.ok(!guildId.safeParse("222222222222222222").success);
+  } finally {
+    delete process.env.DISCORD_ALLOWED_GUILDS;
+  }
+  assert.ok(guildId.safeParse("222222222222222222").success, "no restriction when unset");
 });

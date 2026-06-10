@@ -1,6 +1,6 @@
 import { ChannelType, NewsChannel } from "discord.js";
 import { z } from "zod";
-import { discord, getGuildChannel } from "../client.js";
+import { discord, getGuildChannel, fetchChannelChecked } from "../client.js";
 import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
 
 /** Tool definitions for creating, deleting, editing, moving, and cloning channels. */
@@ -34,16 +34,20 @@ const tools = [
   defineTool({
     name: "discord_delete_channel",
     description:
-      "Permanently delete a channel and all of its messages. IRREVERSIBLE. Requires the Manage Channels permission. An optional reason is recorded in the audit log. Returns a confirmation.",
+      "Permanently delete a channel and all of its messages. IRREVERSIBLE. SAFE BY DEFAULT: dry_run is true unless explicitly set to false, so call it first to preview, then re-call with dry_run:false to actually delete. Requires the Manage Channels permission. An optional reason is recorded in the audit log.",
     annotations: { title: "Delete channel", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel to delete."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
+      dry_run: z.boolean().default(true).describe("If true (default), only reports which channel would be deleted without deleting it. Set false to actually delete."),
     }),
-    handle: async ({ channel_id, reason }) => {
-      const channel = await discord.channels.fetch(channel_id);
+    handle: async ({ channel_id, reason, dry_run }) => {
+      const channel = await fetchChannelChecked(channel_id);
       if (!channel) throw new Error("Channel not found.");
       const channelName = "name" in channel ? channel.name : channel.id;
+      if (dry_run) {
+        return { content: [{ type: "text", text: `🔍 Dry run: channel #${channelName} would be deleted. Re-call with dry_run:false to delete.` }] };
+      }
       await channel.delete(reason);
       return { content: [{ type: "text", text: `✅ Channel #${channelName} deleted.` }] };
     },
@@ -126,7 +130,7 @@ const tools = [
       target_channel_id: snowflake.describe("ID (snowflake) of the channel that will receive published messages."),
     }),
     handle: async ({ source_channel_id, target_channel_id }) => {
-      const source = await discord.channels.fetch(source_channel_id);
+      const source = await fetchChannelChecked(source_channel_id);
       if (!source || !(source instanceof NewsChannel)) throw new Error("Source channel is not an announcement channel.");
       await source.addFollower(target_channel_id);
       return { content: [{ type: "text", text: `✅ Now following announcement channel in target channel.` }] };

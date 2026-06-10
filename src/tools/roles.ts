@@ -1,7 +1,7 @@
 import { ColorResolvable, Role, Guild } from "discord.js";
 import { z } from "zod";
 import { discord, serializePermissions, deserializePermissions } from "../client.js";
-import { defineTool, defineModule, snowflake, guildId, structured } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, structured, httpUrl } from "./define.js";
 
 const roleId = snowflake.describe("ID (snowflake) of the role to edit.");
 
@@ -60,9 +60,14 @@ const tools = [
         .filter((r) => r.name !== "@everyone")
         .sort((a, b) => b.position - a.position)
         .map((r) => ({
-          id: r.id, name: r.name, color: r.hexColor, position: r.position,
-          memberCount: r.members.size, permissions: serializePermissions(r.permissions),
-          hoist: r.hoist, mentionable: r.mentionable,
+          id: r.id,
+          name: r.name,
+          color: r.hexColor,
+          position: r.position,
+          memberCount: r.members.size,
+          permissions: serializePermissions(r.permissions),
+          hoist: r.hoist,
+          mentionable: r.mentionable,
         }));
       return structured({ roles: result });
     },
@@ -71,14 +76,32 @@ const tools = [
     name: "discord_create_role",
     description:
       "Create a new role in a server. Requires the Manage Roles permission; the new role is placed below the bot's highest role. Use discord_add_role to then assign it to members. Returns the new role's name and ID.",
-    annotations: { title: "Create role", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Create role",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       name: z.string().describe("Name of the new role (max 100 characters)."),
-      color: z.string().optional().describe("Role color as a hex string, e.g. '#FF5733'."),
-      hoist: z.boolean().optional().describe("If true, display members with this role separately in the member list."),
+      color: z
+        .string()
+        .regex(/^#[0-9A-Fa-f]{6}$/, "Hex color like '#FF5733'.")
+        .optional()
+        .describe("Role color as a hex string, e.g. '#FF5733'."),
+      hoist: z
+        .boolean()
+        .optional()
+        .describe("If true, display members with this role separately in the member list."),
       mentionable: z.boolean().optional().describe("If true, anyone can @mention this role."),
-      permissions: z.union([z.array(z.string()), z.string()]).optional().describe("Server-wide permission flag names to grant, e.g. ['SendMessages','ViewChannel']. Uses Discord PermissionsBitField flag names."),
+      permissions: z
+        .union([z.array(z.string()), z.string()])
+        .optional()
+        .describe(
+          "Server-wide permission flag names to grant, e.g. ['SendMessages','ViewChannel']. Uses Discord PermissionsBitField flag names.",
+        ),
     }),
     handle: async ({ guild_id, name, color, hoist, mentionable, permissions }) => {
       const guild = await discord.guilds.fetch(guild_id);
@@ -90,22 +113,42 @@ const tools = [
         mentionable,
         permissions: perms ? deserializePermissions(perms) : undefined,
       });
-      return { content: [{ type: "text", text: `✅ Role "${role.name}" created (id: ${role.id}).` }] };
+      return {
+        content: [{ type: "text", text: `✅ Role "${role.name}" created (id: ${role.id}).` }],
+      };
     },
   }),
   defineTool({
     name: "discord_edit_role",
     description:
       "Update an existing role's name, color, permissions, hoist, or mentionable flag. Only provided fields change; passing permissions REPLACES the role's full permission set. Requires the Manage Roles permission, and the role must be below the bot's highest role.",
-    annotations: { title: "Edit role", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Edit role",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       role_id: roleId,
       name: z.string().optional().describe("New role name (max 100 characters)."),
-      color: z.string().optional().describe("New role color as a hex string, e.g. '#FF5733'."),
-      hoist: z.boolean().optional().describe("If true, display members with this role separately in the member list."),
+      color: z
+        .string()
+        .regex(/^#[0-9A-Fa-f]{6}$/, "Hex color like '#FF5733'.")
+        .optional()
+        .describe("New role color as a hex string, e.g. '#FF5733'."),
+      hoist: z
+        .boolean()
+        .optional()
+        .describe("If true, display members with this role separately in the member list."),
       mentionable: z.boolean().optional().describe("If true, anyone can @mention this role."),
-      permissions: z.union([z.array(z.string()), z.string()]).optional().describe("Permission flag names. Providing this REPLACES the role's entire permission set. Uses Discord PermissionsBitField flag names."),
+      permissions: z
+        .union([z.array(z.string()), z.string()])
+        .optional()
+        .describe(
+          "Permission flag names. Providing this REPLACES the role's entire permission set. Uses Discord PermissionsBitField flag names.",
+        ),
     }),
     handle: async ({ guild_id, role_id, name, color, hoist, mentionable, permissions }) => {
       const guild = await discord.guilds.fetch(guild_id);
@@ -125,7 +168,13 @@ const tools = [
     name: "discord_delete_role",
     description:
       "Permanently delete a role from the server; it is automatically removed from every member who held it. IRREVERSIBLE. Requires the Manage Roles permission, and the role must be below the bot's highest role.",
-    annotations: { title: "Delete role", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
+    annotations: {
+      title: "Delete role",
+      readOnlyHint: false,
+      destructiveHint: true,
+      idempotentHint: false,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       role_id: snowflake.describe("ID (snowflake) of the role to delete."),
@@ -142,7 +191,13 @@ const tools = [
     name: "discord_add_role",
     description:
       "Assign an existing role to a member. Requires the Manage Roles permission, and the role must be below the bot's highest role. Idempotent: assigning a role the member already has has no effect. Use discord_remove_role to undo.",
-    annotations: { title: "Add role to member", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Add role to member",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       user_id: snowflake.describe("Discord user ID (snowflake) of the member to give the role to."),
@@ -160,10 +215,18 @@ const tools = [
     name: "discord_remove_role",
     description:
       "Remove a role from a member. Requires the Manage Roles permission, and the role must be below the bot's highest role. Idempotent: removing a role the member doesn't have has no effect. Reverses discord_add_role.",
-    annotations: { title: "Remove role from member", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Remove role from member",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
-      user_id: snowflake.describe("Discord user ID (snowflake) of the member to remove the role from."),
+      user_id: snowflake.describe(
+        "Discord user ID (snowflake) of the member to remove the role from.",
+      ),
       role_id: snowflake.describe("ID (snowflake) of the role to remove."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
@@ -197,14 +260,23 @@ const tools = [
       let truncated = true;
       for (let i = 0; i < MAX_PAGES; i++) {
         const page = await guild.members.list({ limit: 1000, after });
-        if (page.size < 1000) { truncated = false; break; }
+        if (page.size < 1000) {
+          truncated = false;
+          break;
+        }
         after = page.lastKey();
       }
-      const members = role.members.map((m) => ({ id: m.id, username: m.user.tag, nickname: m.nickname }));
+      const members = role.members.map((m) => ({
+        id: m.id,
+        username: m.user.tag,
+        nickname: m.nickname,
+      }));
       return structured({
         members,
         truncated,
-        note: truncated ? `Only the first ${MAX_PAGES * 1000} members were scanned; results may be incomplete on very large servers.` : undefined,
+        note: truncated
+          ? `Only the first ${MAX_PAGES * 1000} members were scanned; results may be incomplete on very large servers.`
+          : undefined,
       });
     },
   }),
@@ -212,29 +284,56 @@ const tools = [
     name: "discord_set_role_position",
     description:
       "Move a role up or down in the server's role hierarchy, which determines permission precedence and member-list ordering. Higher position = higher in the list. Requires the Manage Roles permission, and the target position must be below the bot's highest role.",
-    annotations: { title: "Set role position", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Set role position",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       role_id: snowflake.describe("ID (snowflake) of the role to reposition."),
-      position: z.int().min(0).describe("New hierarchy position (0 = lowest, just above @everyone). Higher numbers rank higher."),
+      position: z
+        .int()
+        .min(0)
+        .describe(
+          "New hierarchy position (0 = lowest, just above @everyone). Higher numbers rank higher.",
+        ),
     }),
     handle: async ({ guild_id, role_id, position }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const role = await fetchRole(guild, role_id);
       await role.setPosition(position);
-      return { content: [{ type: "text", text: `✅ Role "${role.name}" moved to position ${position}.` }] };
+      return {
+        content: [{ type: "text", text: `✅ Role "${role.name}" moved to position ${position}.` }],
+      };
     },
   }),
   defineTool({
     name: "discord_set_role_icon",
     description:
       "Set or clear a role's icon — either a custom image or a unicode emoji. Requires the server to be Boost Level 2+ (the ROLE_ICONS feature) and the Manage Roles permission. Pass null to either field to remove that icon. Returns a confirmation.",
-    annotations: { title: "Set role icon", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    annotations: {
+      title: "Set role icon",
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
     schema: z.object({
       guild_id: guildId,
       role_id: snowflake.describe("ID (snowflake) of the role to set the icon on."),
-      icon: z.string().nullable().optional().describe("Image URL for the role icon, or null to remove it."),
-      unicode_emoji: z.string().nullable().optional().describe("Unicode emoji to use as the role icon, or null to remove it."),
+      icon: z
+        .union([httpUrl, z.literal("null")])
+        .nullable()
+        .optional()
+        .describe("Image URL for the role icon, or null to remove it."),
+      unicode_emoji: z
+        .string()
+        .nullable()
+        .optional()
+        .describe("Unicode emoji to use as the role icon, or null to remove it."),
     }),
     handle: async ({ guild_id, role_id, icon, unicode_emoji }) => {
       const guild = await discord.guilds.fetch(guild_id);
@@ -243,7 +342,9 @@ const tools = [
         await role.setIcon(icon === "null" || icon === null ? null : icon);
       }
       if (unicode_emoji !== undefined) {
-        await role.setUnicodeEmoji(unicode_emoji === "null" || unicode_emoji === null ? null : unicode_emoji);
+        await role.setUnicodeEmoji(
+          unicode_emoji === "null" || unicode_emoji === null ? null : unicode_emoji,
+        );
       }
       return { content: [{ type: "text", text: `✅ Role "${role.name}" icon updated.` }] };
     },
