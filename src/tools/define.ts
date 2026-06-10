@@ -18,6 +18,12 @@ export const guildId = snowflake.describe("Discord server (guild) ID (snowflake)
 export const intIn = (min: number, max: number) => z.int().min(min).max(max);
 
 /**
+ * An http(s)-only URL. Bare `z.url()` accepts any WHATWG scheme (javascript:,
+ * ftp:, mailto:…) that Discord rejects for clickable/image links.
+ */
+export const httpUrl = z.url({ protocol: /^https?$/ });
+
+/**
  * Converts a zod schema into the JSON Schema shape MCP sends over the wire.
  * `io: "input"` emits the input view (so `.default()`s stay optional); the `$schema`
  * key zod adds is stripped because MCP `inputSchema` is a bare object schema.

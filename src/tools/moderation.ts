@@ -21,8 +21,15 @@ const tools = [
     annotations: { title: "Get audit log", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,
-      limit: intIn(1, 100).default(25).describe("How many recent entries to fetch (1–100). Default 25."),
-      action_type: z.nativeEnum(AuditLogEvent).optional().describe("Optional Discord AuditLogEvent numeric ID to filter by (e.g. 22 = MemberBanAdd). Omit for all action types."),
+      limit: intIn(1, 100)
+        .default(25)
+        .describe("How many recent entries to fetch (1–100). Default 25."),
+      action_type: z
+        .union([z.enum(AuditLogEvent), z.int().min(1)])
+        .optional()
+        .describe(
+          "Optional Discord AuditLogEvent numeric ID to filter by (e.g. 22 = MemberBanAdd). Accepts event IDs newer than the bundled enum. Omit for all action types.",
+        ),
     }),
     outputSchema: z.object({ entries: z.array(auditLogEntry) }),
     handle: async ({ guild_id, limit, action_type }) => {
@@ -32,9 +39,12 @@ const tools = [
         type: action_type,
       });
       const entries = logs.entries.map((entry) => ({
-        id: entry.id, action: entry.action,
-        executor: entry.executor?.tag ?? null, target: entry.targetId,
-        reason: entry.reason, createdAt: entry.createdAt.toISOString(),
+        id: entry.id,
+        action: entry.action,
+        executor: entry.executor?.tag ?? null,
+        target: entry.targetId,
+        reason: entry.reason,
+        createdAt: entry.createdAt.toISOString(),
       }));
       return structured({ entries });
     },

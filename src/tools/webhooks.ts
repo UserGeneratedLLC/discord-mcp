@@ -2,7 +2,7 @@ import { WebhookClient } from "discord.js";
 import { z } from "zod";
 import { discord } from "../client.js";
 import { buildEmbed, embedObjectSchema } from "../embeds.js";
-import { defineTool, defineModule, snowflake, guildId, structured } from "./define.js";
+import { defineTool, defineModule, snowflake, guildId, httpUrl, structured } from "./define.js";
 
 const webhookId = snowflake.describe("ID (snowflake) of the webhook.");
 const webhookToken = z.string().describe("Secret token of the webhook.");
@@ -32,7 +32,7 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel to attach the webhook to."),
       name: z.string().describe("Display name for the webhook (max 80 characters)."),
-      avatar: z.string().optional().describe("Optional avatar image URL for the webhook."),
+      avatar: httpUrl.optional().describe("Optional avatar image URL for the webhook."),
     }),
     handle: async ({ channel_id, name, avatar }) => {
       const channel = await discord.channels.fetch(channel_id);
@@ -76,8 +76,7 @@ const tools = [
         .string()
         .optional()
         .describe("Override the webhook's default display name for this message."),
-      avatar_url: z
-        .string()
+      avatar_url: httpUrl
         .optional()
         .describe("Override the webhook's default avatar for this message."),
       embeds: z
@@ -123,7 +122,7 @@ const tools = [
     schema: z.object({
       webhook_id: webhookId.describe("ID (snowflake) of the webhook to edit."),
       name: z.string().optional().describe("New display name for the webhook (max 80 characters)."),
-      avatar: z.string().optional().describe("New avatar image URL for the webhook."),
+      avatar: httpUrl.optional().describe("New avatar image URL for the webhook."),
       channel_id: snowflake
         .optional()
         .describe("ID (snowflake) of a channel to move the webhook to."),
