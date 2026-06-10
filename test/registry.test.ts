@@ -11,10 +11,15 @@ test("selectModules exposes everything when unset or `all`", () => {
   delete process.env.DISCORD_MCP_TOOLSETS;
 });
 
-test("selectModules picks listed toolsets, case-insensitive", () => {
+test("selectModules picks exactly the listed toolsets, case-insensitive", () => {
   process.env.DISCORD_MCP_TOOLSETS = "Discovery, MESSAGES";
   try {
-    assert.equal(selectModules().length, 2);
+    const selected = selectModules();
+    assert.equal(selected.length, 2);
+    const names = selected.flatMap((m) => m.definitions.map((d) => d.name));
+    assert.ok(names.includes("discord_list_guilds"), "discovery toolset selected");
+    assert.ok(names.includes("discord_read_messages"), "messages toolset selected");
+    assert.ok(!names.includes("discord_ban_member"), "destructive member tools must be gated off");
   } finally {
     delete process.env.DISCORD_MCP_TOOLSETS;
   }

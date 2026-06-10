@@ -1,11 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { PermissionsBitField } from "discord.js";
-import {
-  validateId,
-  serializePermissions,
-  deserializePermissions,
-} from "../src/client.js";
+import { validateId, serializePermissions, deserializePermissions } from "../src/client.js";
 
 test("validateId accepts a valid snowflake", () => {
   assert.equal(validateId("123456789012345678", "id"), "123456789012345678");

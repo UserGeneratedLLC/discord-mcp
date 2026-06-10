@@ -1,7 +1,7 @@
 import { WebhookClient } from "discord.js";
 import { z } from "zod";
 import { discord, fetchChannelChecked, assertAllowedGuild, allowListActive } from "../client.js";
-import { buildEmbed, embedObjectSchema } from "../embeds.js";
+import { buildEmbed, embedArraySchema } from "../embeds.js";
 import { defineTool, defineModule, snowflake, guildId, httpUrl, structured } from "./define.js";
 
 const webhookId = snowflake.describe("ID (snowflake) of the webhook.");
@@ -79,8 +79,7 @@ const tools = [
       avatar_url: httpUrl
         .optional()
         .describe("Override the webhook's default avatar for this message."),
-      embeds: z
-        .array(embedObjectSchema)
+      embeds: embedArraySchema
         .optional()
         .describe("Up to 10 embed objects to attach to the webhook message."),
     }),
@@ -94,11 +93,7 @@ const tools = [
         if (content) sendOptions.content = content;
         if (username) sendOptions.username = username;
         if (avatar_url) sendOptions.avatarURL = avatar_url;
-        if (embeds) {
-          if (embeds.length > 10)
-            throw new Error("Discord allows a maximum of 10 embeds per message.");
-          sendOptions.embeds = embeds.map((e) => buildEmbed(e));
-        }
+        if (embeds) sendOptions.embeds = embeds.map((e) => buildEmbed(e));
         if (!sendOptions.content && !sendOptions.embeds) {
           throw new Error("At least one of content or embeds is required.");
         }
@@ -240,8 +235,7 @@ const tools = [
         .string()
         .optional()
         .describe("New plain-text content for the message (max 2000 characters)."),
-      embeds: z
-        .array(embedObjectSchema)
+      embeds: embedArraySchema
         .optional()
         .describe("Up to 10 embed objects to attach to the webhook message."),
     }),

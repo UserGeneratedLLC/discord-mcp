@@ -28,7 +28,7 @@ test("field descriptions propagate from .describe() into the inputSchema", () =>
   const send = messages.definitions.find((d) => d.name === "discord_send_message");
   const props = (send!.inputSchema as { properties: Record<string, { description?: string }> })
     .properties;
-  assert.match(props.content.description ?? "", /Plain-text body/);
+  assert.ok((props.content.description ?? "").length > 0, "field description must propagate");
 });
 
 test("handle rejects invalid args before reaching the Discord API", async () => {

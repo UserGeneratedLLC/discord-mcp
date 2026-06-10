@@ -1,6 +1,11 @@
 import { ColorResolvable, Role, Guild } from "discord.js";
 import { z } from "zod";
-import { discord, serializePermissions, deserializePermissions } from "../client.js";
+import {
+  discord,
+  serializePermissions,
+  deserializePermissions,
+  parsePermissionNames,
+} from "../client.js";
 import { defineTool, defineModule, snowflake, guildId, structured, httpUrl } from "./define.js";
 
 const roleId = snowflake.describe("ID (snowflake) of the role to edit.");
@@ -26,12 +31,6 @@ const roleMember = z.object({
  * Parses a permission array from tool arguments.
  * Accepts an array, a JSON string, or returns undefined if absent.
  */
-function parsePerms(raw: string[] | string | undefined): string[] | undefined {
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === "string") return JSON.parse(raw);
-  return undefined;
-}
-
 /** Fetches a role by ID, throwing a clear error if it does not exist in the guild. */
 async function fetchRole(guild: Guild, rawId: string): Promise<Role> {
   const role = await guild.roles.fetch(rawId);
@@ -102,13 +101,13 @@ const tools = [
     }),
     handle: async ({ guild_id, name, color, hoist, mentionable, permissions }) => {
       const guild = await discord.guilds.fetch(guild_id);
-      const perms = parsePerms(permissions);
+      const perms = permissions === undefined ? undefined : parsePermissionNames(permissions);
       const role = await guild.roles.create({
         name,
         color: color as ColorResolvable | undefined,
         hoist,
         mentionable,
-        permissions: perms ? deserializePermissions(perms) : undefined,
+        permissions: perms !== undefined ? deserializePermissions(perms) : undefined,
       });
       return {
         content: [{ type: "text", text: `✅ Role "${role.name}" created (id: ${role.id}).` }],
@@ -150,13 +149,13 @@ const tools = [
     handle: async ({ guild_id, role_id, name, color, hoist, mentionable, permissions }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const role = await fetchRole(guild, role_id);
-      const perms = parsePerms(permissions);
+      const perms = permissions === undefined ? undefined : parsePermissionNames(permissions);
       await role.edit({
         name,
         color: color as ColorResolvable | undefined,
         hoist,
         mentionable,
-        permissions: perms ? deserializePermissions(perms) : undefined,
+        permissions: perms !== undefined ? deserializePermissions(perms) : undefined,
       });
       return { content: [{ type: "text", text: `✅ Role "${role.name}" updated.` }] };
     },
@@ -301,6 +300,11 @@ const tools = [
     handle: async ({ guild_id, role_id, position }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const role = await fetchRole(guild, role_id);
+      const maxPosition = guild.roles.cache.size - 1;
+      if (position > maxPosition)
+        throw new Error(
+          `position ${position} is out of range — this server's highest role position is ${maxPosition}.`,
+        );
       await role.setPosition(position);
       return {
         content: [{ type: "text", text: `✅ Role "${role.name}" moved to position ${position}.` }],
@@ -318,20 +322,25 @@ const tools = [
       idempotentHint: true,
       openWorldHint: true,
     },
-    schema: z.object({
-      guild_id: guildId,
-      role_id: snowflake.describe("ID (snowflake) of the role to set the icon on."),
-      icon: z
-        .union([httpUrl, z.literal("null")])
-        .nullable()
-        .optional()
-        .describe("Image URL for the role icon, or null to remove it."),
-      unicode_emoji: z
-        .string()
-        .nullable()
-        .optional()
-        .describe("Unicode emoji to use as the role icon, or null to remove it."),
-    }),
+    schema: z
+      .object({
+        guild_id: guildId,
+        role_id: snowflake.describe("ID (snowflake) of the role to set the icon on."),
+        icon: z
+          .union([httpUrl, z.literal("null")])
+          .nullable()
+          .optional()
+          .describe("Image URL for the role icon, or null to remove it."),
+        unicode_emoji: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("Unicode emoji to use as the role icon, or null to remove it."),
+      })
+      .refine(
+        (a) => a.icon !== undefined || a.unicode_emoji !== undefined,
+        "Provide icon or unicode_emoji.",
+      ),
     handle: async ({ guild_id, role_id, icon, unicode_emoji }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const role = await fetchRole(guild, role_id);

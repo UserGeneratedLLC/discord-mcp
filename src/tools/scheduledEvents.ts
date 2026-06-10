@@ -179,10 +179,6 @@ const tools = [
       const guild = await discord.guilds.fetch(guild_id);
 
       const entityType = ENTITY_TYPE_MAP[entity_type];
-      if (!entityType)
-        throw new Error(
-          `Invalid entity_type: "${entity_type}". Must be VOICE, STAGE_INSTANCE, or EXTERNAL.`,
-        );
 
       if (
         (entityType === GuildScheduledEventEntityType.Voice ||
@@ -393,6 +389,10 @@ const tools = [
       if (event.entityType === GuildScheduledEventEntityType.External && !channel_id)
         throw new Error(
           "channel_id is required for EXTERNAL events (they have no channel of their own).",
+        );
+      if (event.entityType !== GuildScheduledEventEntityType.External && channel_id)
+        throw new Error(
+          "channel_id is only honored for EXTERNAL events — VOICE/STAGE invites always point at the event's own channel; omit channel_id.",
         );
       const url = await event.createInviteURL({
         channel: channel_id,
