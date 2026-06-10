@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.7.2] - 2026-06-10
+
+### Fixed
+
+- MCP Registry namespace case: GitHub OIDC grants publish rights on `io.github.PaSympa/*` (exact GitHub account casing), but `mcpName` / `server.json` used lowercase `io.github.pasympa`, so the registry publish of 1.7.1 was rejected with a 403. Both now use `io.github.PaSympa/discord-mcp`
+
 ## [1.7.1] - 2026-06-10
 
 ### Added

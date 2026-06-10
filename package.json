@@ -1,7 +1,7 @@
 {
   "name": "@pasympa/discord-mcp",
   "version": "1.7.1",
-  "mcpName": "io.github.pasympa/discord-mcp",
+  "mcpName": "io.github.PaSympa/discord-mcp",
   "description": "A lightweight, multi-guild Discord MCP server with 95+ tools",
   "main": "dist/index.js",
   "type": "commonjs",
