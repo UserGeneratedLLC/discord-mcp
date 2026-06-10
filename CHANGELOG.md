@@ -14,6 +14,7 @@
 - `discord_set_nickname` now requires the `nickname` field (string or null) — omitting it used to silently clear the nickname; `discord_bulk_ban` caps `user_ids` at 200 (Discord API limit) and `discord_set_role_position` requires `position >= 1` (and rejects positions above the server's highest role instead of silently doing nothing)
 - `discord_set_role_icon` requires at least one of `icon`/`unicode_emoji` (both omitted used to report success without doing anything); `discord_create_event_invite` rejects `channel_id` on non-EXTERNAL events (it was silently ignored); embed arrays advertise and enforce `maxItems: 10`; invalid permission flag names are rejected with the culprit named instead of crashing with an opaque internal error
 - The `events` toolset is renamed `scheduled_events`
+- Node 20 support dropped (`engines: ">=22.0.0"`) — Node 20 reached end-of-life on 2026-04-30 and no longer receives security fixes
 
 ### Added
 
