@@ -47,7 +47,7 @@ export const embedFieldsShape = {
 /** Schema for a single embed object (e.g. an item of `discord_send_multiple_embeds`). */
 export const embedObjectSchema = z.object(embedFieldsShape);
 
-/** Validated embed input — the typed shape `buildEmbed` consumes from migrated tools. */
+/** Validated embed input — the typed shape `buildEmbed` consumes. */
 export type EmbedInput = z.infer<typeof embedObjectSchema>;
 
 /**

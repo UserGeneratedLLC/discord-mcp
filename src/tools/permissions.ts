@@ -133,7 +133,7 @@ const tools = [
   defineTool({
     name: "discord_audit_permissions",
     description:
-      "Generate a server-wide permission report: for every channel that has overwrites, lists each role/member and their allowed/denied permissions (entity names resolved). Read-only. Returns a JSON array. Use discord_get_channel_permissions for a single channel.",
+      "Generate a server-wide permission report: for every channel that has overwrites, lists each role/member and their allowed/denied permissions (entity names resolved). Read-only. Returns { channels: [...] } with channel, channelId, overwrites. Use discord_get_channel_permissions for a single channel.",
     annotations: { title: "Audit permissions", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,

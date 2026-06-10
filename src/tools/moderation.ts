@@ -3,7 +3,6 @@ import { z } from "zod";
 import { discord } from "../client.js";
 import { defineTool, defineModule, guildId, intIn, structured } from "./define.js";
 
-/** Tool definitions for server moderation (audit log). */
 const auditLogEntry = z.object({
   id: z.string(),
   action: z.number(),
@@ -13,11 +12,12 @@ const auditLogEntry = z.object({
   createdAt: z.string(),
 });
 
+/** Tool definitions for server moderation (audit log). */
 const tools = [
   defineTool({
     name: "discord_get_audit_log",
     description:
-      "Fetch the server's audit log — a record of administrative actions (bans, kicks, role/channel changes, etc.) with who performed them and when. Requires the View Audit Log permission. Returns a JSON array (id, action, executor, target, reason, timestamp). Read-only.",
+      "Fetch the server's audit log — a record of administrative actions (bans, kicks, role/channel changes, etc.) with who performed them and when. Requires the View Audit Log permission. Returns { entries: [...] } with id, action, executor, target, reason, createdAt. Read-only.",
     annotations: { title: "Get audit log", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,

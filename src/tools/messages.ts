@@ -5,9 +5,10 @@ import {
   PrivateThreadChannel,
   Message,
   MessageReaction,
+  Routes,
 } from "discord.js";
 import { z } from "zod";
-import { discord, getTextChannel } from "../client.js";
+import { discord, getTextChannel, fetchChannelChecked } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS } from "../constants.js";
 import { buildEmbed, embedFieldsShape, embedObjectSchema } from "../embeds.js";
 import { defineModule, defineTool, snowflake, intIn, structured } from "./define.js";
@@ -34,12 +35,12 @@ function findReaction(msg: Message, emoji: string): MessageReaction | undefined 
   return msg.reactions.cache.get(key);
 }
 
-/** Tool definitions for reading, sending, replying, editing, reacting, threading, embedding, deleting, pinning, and searching messages. */
+/** Tool definitions for channel and thread messages. */
 const tools = [
   defineTool({
     name: "discord_read_messages",
     description:
-      "Read the most recent messages from a text channel or thread, oldest-to-newest. Returns a JSON array of messages (id, author, content, timestamp, attachment count, pinned flag). Use discord_search_messages to filter by keyword, or discord_fetch_pinned_messages for pinned messages only.",
+      "Read the most recent messages from a text channel or thread, oldest-to-newest. Returns { messages: [...] } with id, author, content, timestamp, attachment count, pinned flag. Use discord_search_messages to filter by keyword, or discord_fetch_pinned_messages for pinned messages only.",
     annotations: { title: "Read messages", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to read from."),
@@ -239,10 +240,11 @@ const tools = [
       message_id: messageId.describe("ID of the message to delete."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
-    handle: async ({ channel_id, message_id }) => {
+    handle: async ({ channel_id, message_id, reason }) => {
       const channel = await getTextChannel(channel_id);
-      const msg = await channel.messages.fetch(message_id);
-      await msg.delete();
+      await channel.messages.fetch(message_id);
+      // msg.delete() cannot carry an audit-log reason; the raw REST call sets X-Audit-Log-Reason.
+      await discord.rest.delete(Routes.channelMessage(channel.id, message_id), { reason });
       return { content: [{ type: "text", text: `✅ Message ${message_id} deleted.` }] };
     },
   }),
@@ -295,7 +297,9 @@ const tools = [
       message_id: messageId.describe("ID of the message to publish to followers."),
     }),
     handle: async ({ channel_id, message_id }) => {
-      const channel = await getTextChannel(channel_id);
+      const channel = await fetchChannelChecked(channel_id);
+      if (!channel || channel.type !== ChannelType.GuildAnnouncement)
+        throw new Error("Channel is not an announcement channel — only announcement-channel messages can be published.");
       const msg = await channel.messages.fetch(message_id);
       await msg.crosspost();
       return { content: [{ type: "text", text: `✅ Message ${msg.id} published to all followers of #${channel.name}.` }] };
@@ -332,7 +336,7 @@ const tools = [
   defineTool({
     name: "discord_get_reactions",
     description:
-      "List the users who reacted to a message with a specific emoji. Returns a JSON array of users (id, username, bot flag). Read-only.",
+      "List the users who reacted to a message with a specific emoji. Returns { reactions: [...] } with id, username, bot flag. Read-only.",
     annotations: { title: "Get reactions", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),

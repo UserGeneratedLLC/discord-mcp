@@ -3,7 +3,7 @@
 /** Maximum number of items the Discord API returns per fetch. */
 export const MAX_FETCH_LIMIT = 100;
 
-/** Default fetch limits by context. */
+/** Default and maximum fetch limits by context. */
 export const DEFAULTS = {
   MESSAGES: 20,
   MEMBERS: 50,

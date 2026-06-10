@@ -150,7 +150,7 @@ const tools = [
   defineTool({
     name: "discord_search_members",
     description:
-      "Find server members whose username or nickname starts with a query string (prefix match). Returns a JSON array (id, username, nickname, roles). Use discord_list_members to page through everyone. Read-only.",
+      "Find server members whose username or nickname starts with a query string (prefix match). Returns { members: [...] } with id, username, nickname, roles. Use discord_list_members to page through everyone. Read-only.",
     annotations: { title: "Search members", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,
