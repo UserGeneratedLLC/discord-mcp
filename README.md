@@ -123,8 +123,11 @@ See [VS Code MCP docs](https://code.visualstudio.com/docs/copilot/chat/mcp-serve
     "discord": {
       "command": "docker",
       "args": [
-        "run", "--rm", "-i",
-        "-e", "DISCORD_TOKEN=YOUR_TOKEN_HERE",
+        "run",
+        "--rm",
+        "-i",
+        "-e",
+        "DISCORD_TOKEN=YOUR_TOKEN_HERE",
         "pasympa/discord-mcp:latest"
       ]
     }
@@ -174,17 +177,19 @@ The server loads `.env` automatically via `dotenv`.
 
 ### Environment variables
 
-| Variable | Default | Description |
-| --- | --- | --- |
-| `DISCORD_TOKEN` | — | **Required.** Bot token. |
-| `DISCORD_MESSAGE_CONTENT` | `true` | Set to `false` to drop the Message Content privileged intent (use when it isn't enabled in the portal). Message bodies returned by read tools will be empty. |
-| `DISCORD_GUILD_MEMBERS` | `true` | Set to `false` to drop the Server Members privileged intent. Member listing/search tools degrade accordingly. |
-| `DISCORD_MCP_TOOLSETS` | all | Comma-separated list of toolsets to expose, to keep the tool list small. Unset exposes all 97 tools. |
-| `DISCORD_ALLOWED_GUILDS` | all | Comma-separated guild IDs the server may act on. When set, any guild-scoped tool call targeting another guild is rejected. |
+| Variable                  | Default | Description                                                                                                 |
+| ------------------------- | ------- | ----------------------------------------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`           | —       | **Required.** Bot token.                                                                                    |
+| `DISCORD_MESSAGE_CONTENT` | `true`  | Set to `false` to stop requesting the Message Content privileged gateway intent at connect time.            |
+| `DISCORD_GUILD_MEMBERS`   | `true`  | Set to `false` to stop requesting the Server Members privileged gateway intent at connect time.             |
+| `DISCORD_MCP_TOOLSETS`    | `all`   | Comma-separated list of toolsets to expose, to keep the tool list small. Unset or `all` exposes every tool. |
+| `DISCORD_ALLOWED_GUILDS`  | all     | Comma-separated guild IDs the server may act on. When set, tool calls targeting any other guild are rejected — whether addressed by guild ID, channel ID, thread ID, or webhook. |
 
-Disabling an intent lets the server connect without that privileged intent enabled in the Developer Portal, avoiding the `4014` startup failure.
+These flags only control which gateway intents the server requests when identifying. Requesting a privileged intent that is **not** enabled in the Developer Portal makes the connection fail at startup (close code `4014`) — set the flag to `false` to connect anyway.
 
-**Toolsets** (`DISCORD_MCP_TOOLSETS`): `discovery`, `messages`, `channels`, `permissions`, `members`, `roles`, `moderation`, `screening`, `stats`, `forums`, `webhooks`, `events`, `invites`, `dm`. Example — read-only navigation only: `DISCORD_MCP_TOOLSETS=discovery,messages,members`. Only the listed toolsets' tools are advertised and callable.
+Data access is governed by the **portal toggles**, not by these flags: this server reads everything over the REST API, which Discord gates on the portal setting alone. So with the portal toggles on, setting these flags to `false` loses nothing. With a portal toggle **off**, the corresponding data is restricted regardless of the flags: message bodies come back empty (`content`, `embeds`, `attachments`) and member listing fails — enable the toggle in the portal to restore it.
+
+**Toolsets** (`DISCORD_MCP_TOOLSETS`): `discovery`, `messages`, `channels`, `permissions`, `members`, `roles`, `moderation`, `screening`, `stats`, `forums`, `webhooks`, `scheduled_events`, `invites`, `dm`. Example — read-only navigation only: `DISCORD_MCP_TOOLSETS=discovery,messages,members`. Only the listed toolsets' tools are advertised and callable. Unknown names make the server fail at startup instead of silently exposing everything.
 
 ---
 
@@ -198,6 +203,7 @@ Disabling an intent lets the server connect without that privileged intent enabl
    - Message Content Intent
 
    > **Important:** if the bot requests a privileged intent that is not enabled here, Discord closes the connection with code `4014` and every tool call fails at startup. Enable both, or disable the ones you don't need via the env flags below.
+
 5. **OAuth2 > URL Generator**:
    - Scopes: `bot`
    - Permissions: `Send Messages`, `Read Message History`, `Manage Channels`, `Manage Roles`, `Kick Members`, `Ban Members`, `Moderate Members`, `View Audit Log`, `Manage Messages`, `Manage Threads`, `Add Reactions`, `Manage Guild`, `Manage Webhooks`, `Manage Events`, `Create Instant Invite`
@@ -209,164 +215,164 @@ Disabling an intent lets the server connect without that privileged intent enabl
 
 ### Discovery & Navigation (4 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_list_guilds` | List all servers the bot is connected to |
-| `discord_get_guild_info` | Get detailed guild info (name, members, channels, roles, boosts) |
-| `discord_list_channels` | List all channels in a guild grouped by category |
-| `discord_find_channel_by_name` | Find a channel by name (partial match) |
+| Tool                           | Description                                                      |
+| ------------------------------ | ---------------------------------------------------------------- |
+| `discord_list_guilds`          | List all servers the bot is connected to                         |
+| `discord_get_guild_info`       | Get detailed guild info (name, members, channels, roles, boosts) |
+| `discord_list_channels`        | List all channels in a guild grouped by category                 |
+| `discord_find_channel_by_name` | Find a channel by name (partial match)                           |
 
 ### Messages (18 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_read_messages` | Read the last N messages from a text channel |
-| `discord_send_message` | Send a plain text message |
-| `discord_reply_message` | Reply to a specific message |
-| `discord_edit_message` | Edit a message sent by the bot |
-| `discord_delete_message` | Delete a specific message |
-| `discord_add_reaction` | Add a reaction emoji to a message |
-| `discord_remove_reactions` | Remove reactions (all, by emoji, or by user) |
-| `discord_get_reactions` | List users who reacted with a specific emoji |
-| `discord_create_thread` | Create a thread from a message or standalone |
-| `discord_bulk_delete_messages` | Delete multiple messages at once (2-100) |
-| `discord_send_embed` | Send a rich embed with all options |
-| `discord_edit_embed` | Edit an embed previously sent by the bot |
-| `discord_send_multiple_embeds` | Send up to 10 embeds in a single message |
-| `discord_pin_message` | Pin or unpin a message |
-| `discord_fetch_pinned_messages` | List all pinned messages in a channel |
-| `discord_search_messages` | Search messages by keyword (last 100) |
-| `discord_crosspost_message` | Publish a message to announcement channel followers |
-| `discord_forward_message` | Forward a message to another channel |
+| Tool                            | Description                                         |
+| ------------------------------- | --------------------------------------------------- |
+| `discord_read_messages`         | Read the last N messages from a text channel        |
+| `discord_send_message`          | Send a plain text message                           |
+| `discord_reply_message`         | Reply to a specific message                         |
+| `discord_edit_message`          | Edit a message sent by the bot                      |
+| `discord_delete_message`        | Delete a specific message                           |
+| `discord_add_reaction`          | Add a reaction emoji to a message                   |
+| `discord_remove_reactions`      | Remove reactions (all, by emoji, or by user)        |
+| `discord_get_reactions`         | List users who reacted with a specific emoji        |
+| `discord_create_thread`         | Create a thread from a message or standalone        |
+| `discord_bulk_delete_messages`  | Delete multiple messages at once (2-100)            |
+| `discord_send_embed`            | Send a rich embed with all options                  |
+| `discord_edit_embed`            | Edit an embed previously sent by the bot            |
+| `discord_send_multiple_embeds`  | Send up to 10 embeds in a single message            |
+| `discord_pin_message`           | Pin or unpin a message                              |
+| `discord_fetch_pinned_messages` | List all pinned messages in a channel               |
+| `discord_search_messages`       | Search messages by keyword (last 100)               |
+| `discord_crosspost_message`     | Publish a message to announcement channel followers |
+| `discord_forward_message`       | Forward a message to another channel                |
 
 ### Channels (8 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_create_channel` | Create a text, voice channel or category |
-| `discord_delete_channel` | Delete a channel |
-| `discord_edit_channel` | Edit name, topic, slowmode, NSFW flag |
-| `discord_move_channel` | Move a channel into/out of a category |
-| `discord_clone_channel` | Clone a channel with its permissions |
-| `discord_set_channel_position` | Set display position within a category |
-| `discord_follow_announcement_channel` | Follow an announcement channel |
-| `discord_lock_channel_permissions` | Sync permissions with parent category |
+| Tool                                  | Description                              |
+| ------------------------------------- | ---------------------------------------- |
+| `discord_create_channel`              | Create a text, voice channel or category |
+| `discord_delete_channel`              | Delete a channel                         |
+| `discord_edit_channel`                | Edit name, topic, slowmode, NSFW flag    |
+| `discord_move_channel`                | Move a channel into/out of a category    |
+| `discord_clone_channel`               | Clone a channel with its permissions     |
+| `discord_set_channel_position`        | Set display position within a category   |
+| `discord_follow_announcement_channel` | Follow an announcement channel           |
+| `discord_lock_channel_permissions`    | Sync permissions with parent category    |
 
 ### Channel Permissions (6 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_get_channel_permissions` | List all permission overwrites on a channel |
-| `discord_set_role_permission` | Allow/deny permissions for a role on a channel |
-| `discord_set_member_permission` | Allow/deny permissions for a member on a channel |
-| `discord_reset_channel_permissions` | Remove all overwrites (reset to inherited) |
-| `discord_copy_permissions` | Copy overwrites from one channel to another |
-| `discord_audit_permissions` | Full permission audit for all channels |
+| Tool                                | Description                                      |
+| ----------------------------------- | ------------------------------------------------ |
+| `discord_get_channel_permissions`   | List all permission overwrites on a channel      |
+| `discord_set_role_permission`       | Allow/deny permissions for a role on a channel   |
+| `discord_set_member_permission`     | Allow/deny permissions for a member on a channel |
+| `discord_reset_channel_permissions` | Remove all overwrites (reset to inherited)       |
+| `discord_copy_permissions`          | Copy overwrites from one channel to another      |
+| `discord_audit_permissions`         | Full permission audit for all channels           |
 
 ### Members (11 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_list_members` | List guild members with their roles |
+| Tool                      | Description                                          |
+| ------------------------- | ---------------------------------------------------- |
+| `discord_list_members`    | List guild members with their roles                  |
 | `discord_get_member_info` | Detailed member info (roles, permissions, join date) |
-| `discord_search_members` | Search members by username or nickname |
-| `discord_set_nickname` | Set or clear a member's nickname |
-| `discord_kick_member` | Kick a member |
-| `discord_ban_member` | Ban a member (optionally delete recent messages) |
-| `discord_unban_member` | Unban a user |
-| `discord_bulk_ban` | Ban multiple users at once (raid mitigation) |
-| `discord_list_bans` | List all banned users |
-| `discord_timeout_member` | Timeout a member (0 to remove) |
-| `discord_prune_members` | Remove inactive members (with dry run) |
+| `discord_search_members`  | Search members by username or nickname               |
+| `discord_set_nickname`    | Set or clear a member's nickname                     |
+| `discord_kick_member`     | Kick a member                                        |
+| `discord_ban_member`      | Ban a member (optionally delete recent messages)     |
+| `discord_unban_member`    | Unban a user                                         |
+| `discord_bulk_ban`        | Ban multiple users at once (raid mitigation)         |
+| `discord_list_bans`       | List all banned users                                |
+| `discord_timeout_member`  | Timeout a member (0 to remove)                       |
+| `discord_prune_members`   | Remove inactive members (with dry run)               |
 
 ### Roles (9 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_list_roles` | List all roles with permissions and member count |
-| `discord_create_role` | Create a new role |
-| `discord_edit_role` | Edit a role (name, color, permissions, hoist, mentionable) |
-| `discord_delete_role` | Delete a role |
-| `discord_add_role` | Assign a role to a member |
-| `discord_remove_role` | Remove a role from a member |
-| `discord_get_role_members` | List all members with a specific role |
-| `discord_set_role_position` | Change a role's position in the hierarchy |
-| `discord_set_role_icon` | Set a custom icon or unicode emoji on a role |
+| Tool                        | Description                                                |
+| --------------------------- | ---------------------------------------------------------- |
+| `discord_list_roles`        | List all roles with permissions and member count           |
+| `discord_create_role`       | Create a new role                                          |
+| `discord_edit_role`         | Edit a role (name, color, permissions, hoist, mentionable) |
+| `discord_delete_role`       | Delete a role                                              |
+| `discord_add_role`          | Assign a role to a member                                  |
+| `discord_remove_role`       | Remove a role from a member                                |
+| `discord_get_role_members`  | List all members with a specific role                      |
+| `discord_set_role_position` | Change a role's position in the hierarchy                  |
+| `discord_set_role_icon`     | Set a custom icon or unicode emoji on a role               |
 
 ### Forums (10 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_get_forum_channels` | List all forum channels in a guild |
-| `discord_create_forum_channel` | Create a new forum channel |
-| `discord_create_forum_post` | Create a post/thread in a forum |
-| `discord_get_forum_post` | Get a post's details and messages |
-| `discord_list_forum_threads` | List threads (active + archived) |
-| `discord_reply_to_forum` | Reply to a forum post |
-| `discord_delete_forum_post` | Delete a forum thread |
-| `discord_get_forum_tags` | Get available tags |
-| `discord_set_forum_tags` | Set/update tags on a forum |
-| `discord_update_forum_post` | Update title, archived, locked, tags |
+| Tool                           | Description                          |
+| ------------------------------ | ------------------------------------ |
+| `discord_get_forum_channels`   | List all forum channels in a guild   |
+| `discord_create_forum_channel` | Create a new forum channel           |
+| `discord_create_forum_post`    | Create a post/thread in a forum      |
+| `discord_get_forum_post`       | Get a post's details and messages    |
+| `discord_list_forum_threads`   | List threads (active + archived)     |
+| `discord_reply_to_forum`       | Reply to a forum post                |
+| `discord_delete_forum_post`    | Delete a forum thread                |
+| `discord_get_forum_tags`       | Get available tags                   |
+| `discord_set_forum_tags`       | Set/update tags on a forum           |
+| `discord_update_forum_post`    | Update title, archived, locked, tags |
 
 ### Webhooks (8 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_create_webhook` | Create a webhook on a channel |
-| `discord_send_webhook_message` | Send via webhook (custom username/avatar, embeds) |
-| `discord_edit_webhook` | Edit a webhook's name, avatar, or channel |
-| `discord_delete_webhook` | Delete a webhook |
-| `discord_list_webhooks` | List webhooks for a channel or guild |
-| `discord_edit_webhook_message` | Edit a message sent by a webhook |
-| `discord_delete_webhook_message` | Delete a message sent by a webhook |
-| `discord_fetch_webhook_message` | Fetch a specific webhook message |
+| Tool                             | Description                                       |
+| -------------------------------- | ------------------------------------------------- |
+| `discord_create_webhook`         | Create a webhook on a channel                     |
+| `discord_send_webhook_message`   | Send via webhook (custom username/avatar, embeds) |
+| `discord_edit_webhook`           | Edit a webhook's name, avatar, or channel         |
+| `discord_delete_webhook`         | Delete a webhook                                  |
+| `discord_list_webhooks`          | List webhooks for a channel or guild              |
+| `discord_edit_webhook_message`   | Edit a message sent by a webhook                  |
+| `discord_delete_webhook_message` | Delete a message sent by a webhook                |
+| `discord_fetch_webhook_message`  | Fetch a specific webhook message                  |
 
 ### Scheduled Events (7 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_list_scheduled_events` | List all scheduled events in a guild |
-| `discord_get_scheduled_event` | Get detailed info about a scheduled event |
-| `discord_create_scheduled_event` | Create a voice, stage, or external event |
-| `discord_edit_scheduled_event` | Edit an existing scheduled event |
-| `discord_delete_scheduled_event` | Delete a scheduled event |
-| `discord_get_event_subscribers` | Get users who marked "Interested" |
-| `discord_create_event_invite` | Create an invite linked to an event |
+| Tool                             | Description                               |
+| -------------------------------- | ----------------------------------------- |
+| `discord_list_scheduled_events`  | List all scheduled events in a guild      |
+| `discord_get_scheduled_event`    | Get detailed info about a scheduled event |
+| `discord_create_scheduled_event` | Create a voice, stage, or external event  |
+| `discord_edit_scheduled_event`   | Edit an existing scheduled event          |
+| `discord_delete_scheduled_event` | Delete a scheduled event                  |
+| `discord_get_event_subscribers`  | Get users who marked "Interested"         |
+| `discord_create_event_invite`    | Create an invite linked to an event       |
 
 ### Direct Messages (7 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_send_dm` | Send a direct message to a user by their user ID |
-| `discord_send_dm_embed` | Send an embed in a DM to a user |
-| `discord_read_dms` | Read message history from a DM conversation |
-| `discord_reply_dm` | Reply to a specific DM message |
-| `discord_edit_dm` | Edit a previously sent DM (text) |
-| `discord_edit_dm_embed` | Edit a previously sent DM embed |
-| `discord_delete_dm` | Delete a DM message |
+| Tool                    | Description                                      |
+| ----------------------- | ------------------------------------------------ |
+| `discord_send_dm`       | Send a direct message to a user by their user ID |
+| `discord_send_dm_embed` | Send an embed in a DM to a user                  |
+| `discord_read_dms`      | Read message history from a DM conversation      |
+| `discord_reply_dm`      | Reply to a specific DM message                   |
+| `discord_edit_dm`       | Edit a previously sent DM (text)                 |
+| `discord_edit_dm_embed` | Edit a previously sent DM embed                  |
+| `discord_delete_dm`     | Delete a DM message                              |
 
 ### Invites (5 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_list_invites` | List all active invites in a guild |
-| `discord_list_channel_invites` | List invites for a specific channel |
-| `discord_get_invite` | Get details about an invite by its code |
-| `discord_create_invite` | Create an invite link for a channel |
-| `discord_delete_invite` | Revoke an invite |
+| Tool                           | Description                             |
+| ------------------------------ | --------------------------------------- |
+| `discord_list_invites`         | List all active invites in a guild      |
+| `discord_list_channel_invites` | List invites for a specific channel     |
+| `discord_get_invite`           | Get details about an invite by its code |
+| `discord_create_invite`        | Create an invite link for a channel     |
+| `discord_delete_invite`        | Revoke an invite                        |
 
 ### Moderation & Screening (3 tools)
 
-| Tool | Description |
-|---|---|
-| `discord_get_audit_log` | Fetch the guild audit log |
-| `discord_get_membership_screening` | Get the membership screening form |
+| Tool                                  | Description                            |
+| ------------------------------------- | -------------------------------------- |
+| `discord_get_audit_log`               | Fetch the guild audit log              |
+| `discord_get_membership_screening`    | Get the membership screening form      |
 | `discord_update_membership_screening` | Update screening rules for new members |
 
 ### Stats (1 tool)
 
-| Tool | Description |
-|---|---|
+| Tool                       | Description                                         |
+| -------------------------- | --------------------------------------------------- |
 | `discord_get_server_stats` | Server stats: members, channels, roles, boost level |
 
 ---
