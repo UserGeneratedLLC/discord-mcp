@@ -9,10 +9,12 @@ import {
   PermissionsBitField,
 } from "discord.js";
 
+/**
+ * Initializes the Discord.js client with the gateway intents (privileged ones
+ * are opt-out via env) and exposes shared helpers used across all tool modules.
+ */
+
 // ─── Discord Client ────────────────────────────────────────────────────────────
-// Initializes the Discord.js client with the gateway intents (privileged ones are opt-out via env)
-// and exposes shared helper functions used across all tool modules.
-// ────────────────────────────────────────────────────────────────────────────────
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 

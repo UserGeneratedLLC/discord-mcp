@@ -293,9 +293,9 @@ const tools = [
       role_id: snowflake.describe("ID (snowflake) of the role to reposition."),
       position: z
         .int()
-        .min(0)
+        .min(1)
         .describe(
-          "New hierarchy position (0 = lowest, just above @everyone). Higher numbers rank higher.",
+          "New hierarchy position (1 = lowest, just above @everyone, which sits at 0). Higher numbers rank higher.",
         ),
     }),
     handle: async ({ guild_id, role_id, position }) => {

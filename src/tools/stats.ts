@@ -30,7 +30,7 @@ const tools = [
       createdAt: z.string(),
     }),
     handle: async ({ guild_id }) => {
-      const guild = await (await discord.guilds.fetch(guild_id)).fetch();
+      const guild = await discord.guilds.fetch(guild_id);
       await guild.channels.fetch();
       const cachedBots = guild.members.cache.filter((m) => m.user.bot).size;
       return structured({

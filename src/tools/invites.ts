@@ -66,7 +66,7 @@ const tools = [
   defineTool({
     name: "discord_get_invite",
     description:
-      "Look up a single invite by its code: target server and channel, inviter, uses, and expiry. Works for any public invite, but usage counters are only populated for servers the bot is in (0 otherwise). Read-only. Returns a JSON object.",
+      "Look up a single invite by its code: target server and channel, inviter, and expiry. Works for any public invite, but this endpoint never returns usage counters (uses/max_uses/max_age read 0) — use discord_list_invites or discord_list_channel_invites for real counters. Read-only. Returns a JSON object.",
     annotations: { title: "Get invite", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       invite_code: z
