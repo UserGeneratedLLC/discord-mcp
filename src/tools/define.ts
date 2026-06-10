@@ -128,6 +128,10 @@ export function defineModule(tools: RegisteredTool[]): ToolModule {
     inputSchema: t.inputSchema,
     ...(t.outputSchema ? { outputSchema: t.outputSchema } : {}),
   }));
-  const handlers = new Map(tools.map((t) => [t.name, t.run]));
+  const handlers = new Map<string, RegisteredTool["run"]>();
+  for (const t of tools) {
+    if (handlers.has(t.name)) throw new Error(`Duplicate tool name in module: ${t.name}`);
+    handlers.set(t.name, t.run);
+  }
   return { definitions, handlers };
 }
