@@ -26,13 +26,17 @@ test("derived inputSchema is a bare object schema with no $schema key", () => {
 
 test("field descriptions propagate from .describe() into the inputSchema", () => {
   const send = messages.definitions.find((d) => d.name === "discord_send_message");
-  const props = (send!.inputSchema as { properties: Record<string, { description?: string }> }).properties;
+  const props = (send!.inputSchema as { properties: Record<string, { description?: string }> })
+    .properties;
   assert.match(props.content.description ?? "", /Plain-text body/);
 });
 
 test("handle rejects invalid args before reaching the Discord API", async () => {
   // A malformed channel_id fails zod validation synchronously, with no network call.
-  await assert.rejects(() => messages.handlers.get("discord_read_messages")!({ channel_id: "bad" }), ZodError);
+  await assert.rejects(
+    () => messages.handlers.get("discord_read_messages")!({ channel_id: "bad" }),
+    ZodError,
+  );
 });
 
 test("a module exposes no handler for a tool it does not own", () => {
@@ -41,7 +45,8 @@ test("a module exposes no handler for a tool it does not own", () => {
 
 test("bounded integer fields advertise integer + min/max + default in the inputSchema", () => {
   const read = messages.definitions.find((d) => d.name === "discord_read_messages");
-  const limit = (read!.inputSchema as { properties: Record<string, Record<string, unknown>> }).properties.limit;
+  const limit = (read!.inputSchema as { properties: Record<string, Record<string, unknown>> })
+    .properties.limit;
   assert.equal(limit.type, "integer");
   assert.equal(limit.minimum, 1);
   assert.equal(limit.maximum, 100);
@@ -76,7 +81,10 @@ test("outputSchema is derived (object root) and exposed on the definition", () =
   const schema = mod.definitions[0].outputSchema as Record<string, unknown>;
   assert.equal(schema.type, "object");
   assert.ok(!("$schema" in schema), "$schema must be stripped from outputSchema");
-  assert.ok((schema.properties as Record<string, unknown>).items, "output properties derived from the zod schema");
+  assert.ok(
+    (schema.properties as Record<string, unknown>).items,
+    "output properties derived from the zod schema",
+  );
 });
 
 test("structuredContent conforming to outputSchema is normalised; extra keys are dropped", async () => {
@@ -106,4 +114,15 @@ test("non-conforming structuredContent is left intact instead of throwing", asyn
   // safeParse fails (id is a number), so the handler still returns the raw data — no throw.
   const res = await mod.handlers.get("t_bad")!({});
   assert.deepEqual(res.structuredContent, { id: 42 });
+});
+
+test("defineModule throws on duplicate tool names within a module", () => {
+  const dup = () =>
+    defineTool({
+      name: "t_dup",
+      description: "x",
+      schema: z.object({}),
+      handle: async () => ({ content: [{ type: "text" as const, text: "ok" }] }),
+    });
+  assert.throws(() => defineModule([dup(), dup()]), /Duplicate tool name in module: t_dup/);
 });

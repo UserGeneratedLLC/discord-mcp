@@ -1,5 +1,6 @@
 import { EmbedBuilder, ColorResolvable } from "discord.js";
 import { z } from "zod";
+import { httpUrl } from "./tools/define.js";
 
 /**
  * Zod fields of a rich embed — spread into a tool's `z.object({...})` schema.
@@ -7,7 +8,7 @@ import { z } from "zod";
  */
 export const embedFieldsShape = {
   title: z.string().optional().describe("Embed title shown in bold at the top."),
-  url: z.url().optional().describe("URL that makes the title clickable."),
+  url: httpUrl.optional().describe("URL that makes the title clickable."),
   description: z.string().optional().describe("Main body text of the embed (supports Markdown)."),
   color: z
     .string()
@@ -23,23 +24,23 @@ export const embedFieldsShape = {
           .boolean()
           .optional()
           .describe("If true, render this field side-by-side with adjacent inline fields."),
-      })
+      }),
     )
     .optional()
     .describe(
-      "Up to 25 name/value field blocks. Set inline:true on a field to render it side-by-side with adjacent inline fields (up to 3 per row)."
+      "Up to 25 name/value field blocks. Set inline:true on a field to render it side-by-side with adjacent inline fields (up to 3 per row).",
     ),
   author: z
     .object({
       name: z.string().describe("Author display name."),
-      icon_url: z.url().optional().describe("Small icon shown next to the author name."),
-      url: z.url().optional().describe("URL the author name links to."),
+      icon_url: httpUrl.optional().describe("Small icon shown next to the author name."),
+      url: httpUrl.optional().describe("URL the author name links to."),
     })
     .optional()
     .describe("Author block shown at the top of the embed."),
-  thumbnail_url: z.url().optional().describe("Small image shown in the top-right corner."),
+  thumbnail_url: httpUrl.optional().describe("Small image shown in the top-right corner."),
   footer: z.string().optional().describe("Footer text shown at the bottom of the embed."),
-  image_url: z.url().optional().describe("Large image shown below the embed body."),
+  image_url: httpUrl.optional().describe("Large image shown below the embed body."),
   timestamp: z.boolean().optional().describe("If true, stamp the embed with the current time."),
 } as const;
 
@@ -64,10 +65,16 @@ export function buildEmbed(args: EmbedInput): EmbedBuilder {
   if (args.thumbnail_url) embed.setThumbnail(args.thumbnail_url);
   if (args.timestamp) embed.setTimestamp();
   if (args.author) {
-    embed.setAuthor({ name: args.author.name, iconURL: args.author.icon_url, url: args.author.url });
+    embed.setAuthor({
+      name: args.author.name,
+      iconURL: args.author.icon_url,
+      url: args.author.url,
+    });
   }
   if (args.fields) {
-    embed.addFields(args.fields.map((f) => ({ name: f.name, value: f.value, inline: f.inline ?? false })));
+    embed.addFields(
+      args.fields.map((f) => ({ name: f.name, value: f.value, inline: f.inline ?? false })),
+    );
   }
   return embed;
 }
