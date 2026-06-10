@@ -183,13 +183,13 @@ const tools = [
     schema: z.object({
       guild_id: guildId,
       user_id: snowflake.describe("Discord user ID (snowflake) of the member."),
-      nickname: z.string().nullable().optional().describe("New nickname (max 32 characters), or null to clear it."),
+      nickname: z.string().max(32).nullable().describe("New nickname (max 32 characters), or null to clear it."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
     handle: async ({ guild_id, user_id, nickname, reason }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const member = await guild.members.fetch(user_id);
-      const nick = nickname === null || nickname === "null" ? null : (nickname ?? null);
+      const nick = nickname === null || nickname === "null" ? null : nickname;
       await member.setNickname(nick, reason);
       return { content: [{ type: "text", text: nick ? `✅ Nickname for ${member.user.tag} set to "${nick}".` : `✅ Nickname cleared for ${member.user.tag}.` }] };
     },
@@ -225,18 +225,17 @@ const tools = [
   defineTool({
     name: "discord_bulk_ban",
     description:
-      "Ban many users in a single call, intended for raid mitigation. SAFE BY DEFAULT: dry_run is true unless explicitly set to false, so call it first to preview the resolved user IDs, then re-call with dry_run:false to actually ban them. Requires the Ban Members permission. Returns counts of banned vs failed users. Use discord_ban_member for a single ban with finer control.",
+      "Ban many users in a single call, intended for raid mitigation. SAFE BY DEFAULT: dry_run is true unless explicitly set to false, so call it first to preview the exact list of user IDs that would be banned, then re-call with dry_run:false to actually ban them. Requires the Ban Members permission. Returns counts of banned vs failed users. Use discord_ban_member for a single ban with finer control.",
     annotations: { title: "Bulk ban", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,
-      user_ids: z.array(snowflake).describe("Array of user IDs (snowflakes) to ban."),
+      user_ids: z.array(snowflake).min(1).max(200).describe("Array of user IDs (snowflakes) to ban (max 200 per call — Discord API limit)."),
       delete_message_seconds: intIn(0, 604800).default(0).describe("Also delete each user's messages from the last N seconds (0–604800, i.e. up to 7 days). Default 0."),
       dry_run: z.boolean().default(true).describe("If true (default), only returns the user IDs that would be banned without banning anyone. Set false to actually ban."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
     handle: async ({ guild_id, user_ids, delete_message_seconds, dry_run, reason }) => {
       const guild = await discord.guilds.fetch(guild_id);
-      if (user_ids.length === 0) throw new Error("user_ids must be a non-empty array.");
       if (dry_run) {
         return { content: [{ type: "text", text: `🔍 Dry run: ${user_ids.length} users would be banned:\n${JSON.stringify(user_ids, null, 2)}` }] };
       }

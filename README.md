@@ -189,7 +189,7 @@ These flags only control which gateway intents the server requests when identify
 
 Data access is governed by the **portal toggles**, not by these flags: this server reads everything over the REST API, which Discord gates on the portal setting alone. So with the portal toggles on, setting these flags to `false` loses nothing. With a portal toggle **off**, the corresponding data is restricted regardless of the flags: message bodies come back empty (`content`, `embeds`, `attachments` — except the bot's own messages, DMs, and messages that mention the bot) and member listing fails — enable the toggle in the portal to restore it.
 
-**Toolsets** (`DISCORD_MCP_TOOLSETS`): `discovery`, `messages`, `channels`, `permissions`, `members`, `roles`, `moderation`, `screening`, `stats`, `forums`, `webhooks`, `scheduled_events`, `invites`, `dm`. Example — read-only navigation only: `DISCORD_MCP_TOOLSETS=discovery,messages,members`. Only the listed toolsets' tools are advertised and callable. Unknown names make the server fail at startup instead of silently exposing everything (an empty value counts as unset and exposes all).
+**Toolsets** (`DISCORD_MCP_TOOLSETS`): `discovery`, `messages`, `channels`, `permissions`, `members`, `roles`, `moderation`, `screening`, `stats`, `forums`, `webhooks`, `scheduled_events`, `invites`, `dm`. Example — `DISCORD_MCP_TOOLSETS=discovery,messages,members` exposes only the discovery, message, and member tools. Note: a toolset ships its whole module, including its destructive tools (`messages` includes bulk delete; `members` includes kick/ban) — use `DISCORD_ALLOWED_GUILDS` and the dry-run defaults to bound them. Only the listed toolsets' tools are advertised and callable. Unknown names make the server fail at startup instead of silently exposing everything (an empty value counts as unset and exposes all).
 
 ---
 
@@ -198,11 +198,11 @@ Data access is governed by the **portal toggles**, not by these flags: this serv
 1. Go to [discord.com/developers/applications](https://discord.com/developers/applications)
 2. **New Application** > give it a name
 3. **Bot** tab > **Reset Token** > copy the token
-4. Enable **Privileged Gateway Intents** (both are on by default):
+4. Enable **Privileged Gateway Intents** (this server requests both by default, but new Discord apps have the portal toggles OFF):
    - Server Members Intent
    - Message Content Intent
 
-   > **Important:** if the bot requests a privileged intent that is not enabled here, Discord closes the connection with code `4014` and every tool call fails. Enable both, or disable the ones you don't need via the env flags below.
+   > **Important:** if the bot requests a privileged intent that is not enabled here, Discord closes the connection with code `4014` and every tool call fails. Enable both, or stop requesting the ones you don't need via the [environment variables](#environment-variables) above.
 
 5. **OAuth2 > URL Generator**:
    - Scopes: `bot`
@@ -386,12 +386,12 @@ Data access is governed by the **portal toggles**, not by these flags: this serv
 "Create a forum channel called 'feedback' with tags Bug, Feature, Question"
 "Show the full permission audit for the server"
 "Create a webhook on #notifications and send a test message"
-"Ban user 112233445566 and delete their messages from the last 3 days"
+"Ban user 112233445566778899 and delete their messages from the last 3 days"
 "Create an event called 'Game Night' for next Friday at 8pm"
 "List all upcoming events in the server"
 "Create a permanent invite for #general"
 "List all active invites and delete expired ones"
-"Send a DM to user 112233445566 saying 'Your build passed!'"
+"Send a DM to user 112233445566778899 saying 'Your build passed!'"
 "Search for members named 'john'"
 "List all banned users in the server"
 "Show all pinned messages in #general"
@@ -436,7 +436,9 @@ discord-mcp/
 │       ├── scheduledEvents.ts ← Scheduled events
 │       ├── invites.ts        ← Invite management
 │       └── dm.ts             ← Direct messages
-├── .github/workflows/       ← CI/CD (build check + auto release)
+├── test/                     ← node:test suite (schemas, gating, allow-list)
+├── scripts/                  ← sync-version.js (npm version hook)
+├── .github/workflows/        ← CI/CD (build check + auto release)
 ├── Dockerfile
 ├── .dockerignore
 ├── .env.example

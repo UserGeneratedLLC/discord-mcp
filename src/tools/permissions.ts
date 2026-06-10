@@ -13,6 +13,7 @@ function parsePermArray(value: string[] | string | undefined): string[] {
   return [];
 }
 
+/** Flag names as an array, or a JSON-encoded array string (some clients serialize arrays). */
 const permFlags = z.union([z.array(z.string()), z.string()]).optional();
 
 const channelOverwriteSummary = z.object({
@@ -61,8 +62,8 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel to set the overwrite on."),
       role_id: snowflake.describe("ID (snowflake) of the role to grant/deny permissions for."),
-      allow: permFlags.describe("Permission flag names to allow, e.g. ['SendMessages','ViewChannel']. Uses Discord PermissionsBitField flag names."),
-      deny: permFlags.describe("Permission flag names to deny, e.g. ['SendMessages']."),
+      allow: permFlags.describe("Permission flag names to allow, e.g. ['SendMessages','ViewChannel'] (or the same array JSON-encoded as a string). Uses Discord PermissionsBitField flag names."),
+      deny: permFlags.describe("Permission flag names to deny, e.g. ['SendMessages'] (or the same array JSON-encoded as a string)."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
     handle: async ({ channel_id, role_id, allow, deny, reason }) => {
@@ -82,8 +83,8 @@ const tools = [
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel to set the overwrite on."),
       user_id: snowflake.describe("ID (snowflake) of the member to grant/deny permissions for."),
-      allow: permFlags.describe("Permission flag names to allow, e.g. ['ViewChannel']. Uses Discord PermissionsBitField flag names."),
-      deny: permFlags.describe("Permission flag names to deny."),
+      allow: permFlags.describe("Permission flag names to allow, e.g. ['ViewChannel'] (or the same array JSON-encoded as a string). Uses Discord PermissionsBitField flag names."),
+      deny: permFlags.describe("Permission flag names to deny (array, or JSON-encoded array string)."),
       reason: z.string().optional().describe("Optional reason recorded in the server audit log."),
     }),
     handle: async ({ channel_id, user_id, allow, deny, reason }) => {
@@ -98,7 +99,7 @@ const tools = [
   defineTool({
     name: "discord_reset_channel_permissions",
     description:
-      "Remove ALL permission overwrites on a channel, resetting it to inherit from its category/server defaults. IRREVERSIBLE — the cleared overwrites cannot be recovered. Requires the Manage Roles permission.",
+      "Remove ALL permission overwrites on a channel, so only role/server-level permissions apply. Does NOT re-sync with the category — use discord_lock_channel_permissions for that. IRREVERSIBLE — the cleared overwrites cannot be recovered. Requires the Manage Roles permission.",
     annotations: { title: "Reset channel permissions", readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel whose overwrites will be cleared."),

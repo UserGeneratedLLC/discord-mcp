@@ -3,7 +3,7 @@ import { z } from "zod";
 import { discord, getGuildChannel, fetchChannelChecked } from "../client.js";
 import { defineTool, defineModule, snowflake, guildId, intIn } from "./define.js";
 
-/** Tool definitions for creating, deleting, editing, moving, and cloning channels. */
+/** Tool definitions for guild channels: lifecycle, layout, following, and permission sync. */
 const tools = [
   defineTool({
     name: "discord_create_channel",

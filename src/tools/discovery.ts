@@ -53,7 +53,7 @@ const tools = [
       owner: z.string(),
     }),
     handle: async ({ guild_id }) => {
-      const guild = await (await discord.guilds.fetch(guild_id)).fetch();
+      const guild = await discord.guilds.fetch(guild_id);
       return structured({
         id: guild.id, name: guild.name, description: guild.description,
         memberCount: guild.memberCount, channelCount: guild.channels.cache.size,

@@ -11,6 +11,7 @@
 - `discord_delete_channel` and `discord_bulk_delete_messages` are safe-by-default: `dry_run` defaults to `true` (advertised in the schema), so existing callers preview instead of deleting until they pass `dry_run:false`. The bulk-delete dry run reports the real deletable count (14-day rule applied)
 - Unknown tool names and unexpected `tools/list` cursors are JSON-RPC protocol errors (`-32602`) instead of `isError` results, and validation failures surface as `Invalid arguments — field: message`
 - Read tools (32) now advertise `outputSchema` and return `structuredContent`; conforming outputs are normalised (unknown keys dropped) and non-conforming output is converted to an error instead of being shipped. `discord_fetch_webhook_message` `timestamp` is an ISO string (was mistyped as a number)
+- `discord_set_nickname` now requires the `nickname` field (string or null) — omitting it used to silently clear the nickname; `discord_bulk_ban` caps `user_ids` at 200 (Discord API limit) and `discord_set_role_position` requires `position >= 1`
 - The `events` toolset is renamed `scheduled_events`
 
 ### Added

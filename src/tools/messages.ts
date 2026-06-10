@@ -201,7 +201,7 @@ const tools = [
     annotations: { title: "Edit embed", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: channelId.describe("ID (snowflake) of the channel or thread containing the message."),
-      message_id: messageId.describe("ID of the message to edit. Must be a bot message that already contains an embed."),
+      message_id: messageId.describe("ID of the message to edit. Must be a message authored by this bot (an embed is added if it has none)."),
       ...embedFieldsShape,
     }),
     handle: async ({ channel_id, message_id, ...embedArgs }) => {
@@ -268,7 +268,7 @@ const tools = [
   defineTool({
     name: "discord_search_messages",
     description:
-      "Keyword search over a channel's recent messages using case-insensitive substring matching. Scans only up to the last 100 messages — it does not search full history. Returns matching messages as a JSON array. Use discord_read_messages to fetch recent messages without filtering.",
+      "Keyword search over a channel's recent messages using case-insensitive substring matching. Scans only up to the last 100 messages — it does not search full history. Returns { matches: [...] } with id, author, content, timestamp. Use discord_read_messages to fetch recent messages without filtering.",
     annotations: { title: "Search messages", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to search."),
@@ -364,7 +364,7 @@ const tools = [
   defineTool({
     name: "discord_fetch_pinned_messages",
     description:
-      "List all pinned messages in a channel as a JSON array (id, author, content, timestamp, pinnedAt). Read-only. Use discord_pin_message to change which messages are pinned.",
+      "List all pinned messages in a channel. Returns { messages: [...] } with id, author, content, timestamp, pinnedAt. Read-only. Use discord_pin_message to change which messages are pinned.",
     annotations: { title: "Fetch pinned messages", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       channel_id: snowflake.describe("ID (snowflake) of the channel or thread to list pins from."),
