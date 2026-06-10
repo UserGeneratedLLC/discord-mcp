@@ -85,8 +85,14 @@ const tools = [
     }),
     handle: async ({ webhook_id, webhook_token, content, username, avatar_url, embeds }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
-      if (allowListActive())
-        assertAllowedGuild((await discord.fetchWebhook(webhook_id, webhook_token)).guildId);
+      if (allowListActive()) {
+        const guildOfWebhook = (await discord.fetchWebhook(webhook_id, webhook_token)).guildId;
+        if (!guildOfWebhook)
+          throw new Error(
+            "Webhook has no resolvable guild — refused while DISCORD_ALLOWED_GUILDS is active.",
+          );
+        assertAllowedGuild(guildOfWebhook);
+      }
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         const sendOptions: Record<string, unknown> = {};
@@ -241,8 +247,14 @@ const tools = [
     }),
     handle: async ({ webhook_id, webhook_token, message_id, content, embeds }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
-      if (allowListActive())
-        assertAllowedGuild((await discord.fetchWebhook(webhook_id, webhook_token)).guildId);
+      if (allowListActive()) {
+        const guildOfWebhook = (await discord.fetchWebhook(webhook_id, webhook_token)).guildId;
+        if (!guildOfWebhook)
+          throw new Error(
+            "Webhook has no resolvable guild — refused while DISCORD_ALLOWED_GUILDS is active.",
+          );
+        assertAllowedGuild(guildOfWebhook);
+      }
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         const editOptions: Record<string, unknown> = {};
@@ -274,8 +286,14 @@ const tools = [
     }),
     handle: async ({ webhook_id, webhook_token, message_id }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
-      if (allowListActive())
-        assertAllowedGuild((await discord.fetchWebhook(webhook_id, webhook_token)).guildId);
+      if (allowListActive()) {
+        const guildOfWebhook = (await discord.fetchWebhook(webhook_id, webhook_token)).guildId;
+        if (!guildOfWebhook)
+          throw new Error(
+            "Webhook has no resolvable guild — refused while DISCORD_ALLOWED_GUILDS is active.",
+          );
+        assertAllowedGuild(guildOfWebhook);
+      }
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         await client.deleteMessage(message_id);
@@ -304,8 +322,14 @@ const tools = [
     }),
     handle: async ({ webhook_id, webhook_token, message_id }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
-      if (allowListActive())
-        assertAllowedGuild((await discord.fetchWebhook(webhook_id, webhook_token)).guildId);
+      if (allowListActive()) {
+        const guildOfWebhook = (await discord.fetchWebhook(webhook_id, webhook_token)).guildId;
+        if (!guildOfWebhook)
+          throw new Error(
+            "Webhook has no resolvable guild — refused while DISCORD_ALLOWED_GUILDS is active.",
+          );
+        assertAllowedGuild(guildOfWebhook);
+      }
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         const msg = await client.fetchMessage(message_id);

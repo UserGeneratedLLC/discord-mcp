@@ -3,8 +3,6 @@ import {
   Client,
   Events,
   GatewayIntentBits,
-  TextChannel,
-  ThreadChannel,
   GuildChannel,
   PermissionsBitField,
   type GuildTextBasedChannel,

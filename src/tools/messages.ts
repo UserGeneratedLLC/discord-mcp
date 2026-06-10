@@ -6,11 +6,12 @@ import {
   Message,
   MessageReaction,
   Routes,
+  DiscordAPIError,
 } from "discord.js";
 import { z } from "zod";
 import { discord, getTextChannel, fetchChannelChecked } from "../client.js";
 import { MAX_FETCH_LIMIT, DEFAULTS, AUTO_ARCHIVE_DURATIONS } from "../constants.js";
-import { buildEmbed, embedFieldsShape, embedObjectSchema, embedArraySchema } from "../embeds.js";
+import { buildEmbed, embedFieldsShape, embedArraySchema } from "../embeds.js";
 import { defineModule, defineTool, snowflake, intIn, structured } from "./define.js";
 
 const channelId = snowflake.describe("ID (snowflake) of the channel or thread.");
@@ -489,7 +490,17 @@ const tools = [
           "Channel is not an announcement channel — only announcement-channel messages can be published.",
         );
       const msg = await channel.messages.fetch(message_id);
-      await msg.crosspost();
+      try {
+        await msg.crosspost();
+      } catch (err) {
+        // 40033 = already crossposted: treat as success so the tool is truly idempotent.
+        if (err instanceof DiscordAPIError && Number(err.code) === 40033) {
+          return {
+            content: [{ type: "text", text: `✅ Message ${message_id} was already published.` }],
+          };
+        }
+        throw err;
+      }
       return {
         content: [
           {

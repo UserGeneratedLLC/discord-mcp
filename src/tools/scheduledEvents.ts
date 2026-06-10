@@ -26,12 +26,11 @@ const ENTITY_TYPE_MAP: Record<string, GuildScheduledEventEntityType> = {
   EXTERNAL: GuildScheduledEventEntityType.External,
 };
 
-const STATUS_MAP: Record<string, GuildScheduledEventStatus> = {
-  SCHEDULED: GuildScheduledEventStatus.Scheduled,
+const STATUS_MAP = {
   ACTIVE: GuildScheduledEventStatus.Active,
   COMPLETED: GuildScheduledEventStatus.Completed,
   CANCELED: GuildScheduledEventStatus.Canceled,
-};
+} as const;
 
 const ENTITY_TYPE_NAMES: Record<number, string> = {
   [GuildScheduledEventEntityType.StageInstance]: "STAGE_INSTANCE",
@@ -194,21 +193,19 @@ const tools = [
         throw new Error("scheduled_end_time is required for EXTERNAL events.");
       }
 
-      const options: Record<string, unknown> = {
+      const options: GuildScheduledEventCreateOptions = {
         name,
         scheduledStartTime: scheduled_start_time,
         entityType,
         privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
+        description,
+        scheduledEndTime: scheduled_end_time,
+        channel: channel_id,
+        entityMetadata: location !== undefined ? { location } : undefined,
+        image,
       };
-      if (description) options.description = description;
-      if (scheduled_end_time) options.scheduledEndTime = scheduled_end_time;
-      if (channel_id) options.channel = channel_id;
-      if (location) options.entityMetadata = { location };
-      if (image) options.image = image;
 
-      const event = await guild.scheduledEvents.create(
-        options as unknown as GuildScheduledEventCreateOptions,
-      );
+      const event = await guild.scheduledEvents.create(options);
       return {
         content: [
           { type: "text", text: `✅ Scheduled event "${event.name}" created (id: ${event.id}).` },
@@ -267,24 +264,23 @@ const tools = [
       const guild = await discord.guilds.fetch(guild_id);
       const event = await guild.scheduledEvents.fetch(event_id);
 
-      const options: Record<string, unknown> = {};
-      if (name) options.name = name;
-      if (description !== undefined) options.description = description;
-      if (scheduled_start_time) options.scheduledStartTime = scheduled_start_time;
-      if (scheduled_end_time) options.scheduledEndTime = scheduled_end_time;
-      if (channel_id) options.channel = channel_id;
-      if (location) options.entityMetadata = { location };
-      if (image) options.image = image;
-      if (status) options.status = STATUS_MAP[status];
+      const options: GuildScheduledEventEditOptions<
+        GuildScheduledEventStatus,
+        | GuildScheduledEventStatus.Active
+        | GuildScheduledEventStatus.Completed
+        | GuildScheduledEventStatus.Canceled
+      > = {
+        name,
+        description,
+        scheduledStartTime: scheduled_start_time,
+        scheduledEndTime: scheduled_end_time,
+        channel: channel_id,
+        entityMetadata: location !== undefined ? { location } : undefined,
+        image,
+        status: status !== undefined ? STATUS_MAP[status] : undefined,
+      };
 
-      const updated = await event.edit(
-        options as unknown as GuildScheduledEventEditOptions<
-          GuildScheduledEventStatus,
-          | GuildScheduledEventStatus.Active
-          | GuildScheduledEventStatus.Completed
-          | GuildScheduledEventStatus.Canceled
-        >,
-      );
+      const updated = await event.edit(options);
       return {
         content: [
           {

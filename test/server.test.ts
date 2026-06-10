@@ -28,12 +28,30 @@ test("unknown tool is a JSON-RPC InvalidParams protocol error, not a tool result
 test("tools/list serves every definition and rejects unexpected cursors", async () => {
   const client = await connectedClient();
   const { tools } = await client.listTools();
-  assert.ok(tools.length >= 95);
+  assert.equal(tools.length, 97, "update this pin when adding/removing tools");
   await assert.rejects(
     () => client.listTools({ cursor: "bogus" }),
     (err: unknown) => err instanceof McpError && err.code === ErrorCode.InvalidParams,
   );
   await client.close();
+});
+
+test("a handler failure surfaces as an isError result, not a protocol error", async () => {
+  const { discord } = await import("../src/client.js");
+  const { mock } = await import("node:test");
+  mock.method(discord, "isReady", () => false as never);
+  mock.method(discord, "login", async () => {
+    throw new Error("login refused (test)");
+  });
+  const client = await connectedClient();
+  const res = (await client.callTool({
+    name: "discord_list_guilds",
+    arguments: {},
+  })) as { isError?: boolean; content: { text?: string }[] };
+  assert.equal(res.isError, true);
+  assert.match(res.content[0].text ?? "", /login refused \(test\)|DISCORD_TOKEN/);
+  await client.close();
+  mock.restoreAll();
 });
 
 test("formatToolError flattens ZodError paths and surfaces Discord hints", () => {

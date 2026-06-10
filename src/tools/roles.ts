@@ -27,10 +27,6 @@ const roleMember = z.object({
   nickname: z.string().nullable(),
 });
 
-/**
- * Parses a permission array from tool arguments.
- * Accepts an array, a JSON string, or returns undefined if absent.
- */
 /** Fetches a role by ID, throwing a clear error if it does not exist in the guild. */
 async function fetchRole(guild: Guild, rawId: string): Promise<Role> {
   const role = await guild.roles.fetch(rawId);
