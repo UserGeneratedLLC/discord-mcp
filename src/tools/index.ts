@@ -38,30 +38,36 @@ const allToolsets: Record<string, ToolModule> = {
   stats,
   forums,
   webhooks,
-  events: scheduledEvents,
+  scheduled_events: scheduledEvents,
   invites,
   dm,
 };
 
 /**
- * Selects which toolsets to expose from `DISCORD_MCP_TOOLSETS` (comma-separated
- * names). Unset or empty exposes all 97 tools; unknown names are warned and skipped;
- * if nothing valid is selected it falls back to all so the server is never toolless.
+ * Selects which toolsets to expose from `DISCORD_MCP_TOOLSETS` (comma-separated,
+ * case-insensitive; `all` or unset exposes everything). Unknown or empty selections
+ * throw at startup: a typo must not silently expose the full destructive surface.
  */
 function selectModules(): ToolModule[] {
   const raw = process.env.DISCORD_MCP_TOOLSETS?.trim();
   if (!raw) return Object.values(allToolsets);
-  const selected = raw
-    .split(",")
-    .map((name) => name.trim())
-    .filter(Boolean)
-    .map((name) => {
-      const mod = allToolsets[name];
-      if (!mod) console.error(`Unknown toolset in DISCORD_MCP_TOOLSETS: "${name}" (known: ${Object.keys(allToolsets).join(", ")}).`);
-      return mod;
-    })
-    .filter((mod): mod is ToolModule => mod !== undefined);
-  return selected.length > 0 ? selected : Object.values(allToolsets);
+  const names = [
+    ...new Set(
+      raw
+        .split(",")
+        .map((n) => n.trim().toLowerCase())
+        .filter(Boolean),
+    ),
+  ];
+  if (names.includes("all")) return Object.values(allToolsets);
+  const unknown = names.filter((n) => !(n in allToolsets));
+  if (unknown.length > 0 || names.length === 0) {
+    throw new Error(
+      `Invalid DISCORD_MCP_TOOLSETS: unknown toolset(s) ${unknown.map((n) => `"${n}"`).join(", ") || "(none selected)"}. ` +
+        `Known: all, ${Object.keys(allToolsets).join(", ")}.`,
+    );
+  }
+  return names.map((n) => allToolsets[n]);
 }
 
 const modules: ToolModule[] = selectModules();
