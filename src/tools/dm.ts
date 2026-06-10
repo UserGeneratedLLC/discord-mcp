@@ -105,7 +105,7 @@ const tools = [
   defineTool({
     name: "discord_read_dms",
     description:
-      "Read the most recent messages from the bot's DM conversation with a user, oldest-to-newest. Returns a JSON array (id, author, content, embed count, timestamp). Read-only.",
+      "Read the most recent messages from the bot's DM conversation with a user, oldest-to-newest. Returns { messages: [...] } with id, author, content, embed count, timestamp. Read-only.",
     annotations: { title: "Read DMs", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       user_id: userId,

@@ -10,7 +10,7 @@ import {
 } from "discord.js";
 
 // ─── Discord Client ────────────────────────────────────────────────────────────
-// Initializes the Discord.js client with the required gateway intents
+// Initializes the Discord.js client with the gateway intents (privileged ones are opt-out via env)
 // and exposes shared helper functions used across all tool modules.
 // ────────────────────────────────────────────────────────────────────────────────
 
@@ -108,10 +108,12 @@ function allowedGuilds(): string[] {
     .filter(Boolean);
 }
 
+/** True when DISCORD_ALLOWED_GUILDS contains at least one guild ID. */
 export function allowListActive(): boolean {
   return allowedGuilds().length > 0;
 }
 
+/** True if the guild is in DISCORD_ALLOWED_GUILDS — or when no allow-list is configured (empty list allows all guilds). */
 export function isGuildAllowed(guildId: string): boolean {
   const list = allowedGuilds();
   return list.length === 0 || list.includes(guildId);
@@ -134,12 +136,11 @@ export async function fetchChannelChecked(channelId: string) {
 }
 
 /**
- * Fetches a channel by ID and guarantees it is a text-capable guild channel
- * (a TextChannel or any thread inside one — announcement / public / private / forum).
- * Both class hierarchies expose the message-send / edit / fetch surface used by
- * the message tools, so the wrapper accepts either.
+ * Fetches a channel by ID and guarantees it is a TextChannel or a thread of any
+ * kind (public / private / forum post / announcement thread) — both expose the
+ * message-send / edit / fetch surface the message tools use. Announcement (News)
+ * channels themselves do NOT pass this check.
  * @param channelId - Discord snowflake ID of the channel.
- * @returns The resolved TextChannel or ThreadChannel instance.
  * @throws {Error} If the channel does not exist or is neither a text channel nor a thread.
  */
 export async function getTextChannel(channelId: string): Promise<TextChannel | ThreadChannel> {
@@ -151,9 +152,9 @@ export async function getTextChannel(channelId: string): Promise<TextChannel | T
 }
 
 /**
- * Fetches a channel by ID and guarantees it is a guild channel (text, voice, or category).
+ * Fetches a channel by ID and guarantees it is a non-thread guild channel
+ * (text, voice, category, announcement, stage, forum…).
  * @param channelId - Discord snowflake ID of the channel.
- * @returns The resolved GuildChannel instance.
  * @throws {Error} If the channel does not exist or is not a guild channel.
  */
 export async function getGuildChannel(channelId: string): Promise<GuildChannel> {

@@ -7,6 +7,8 @@ import { defineTool, defineModule, snowflake, guildId, intIn, structured } from 
 const inviteSummary = z.object({
   code: z.string(),
   url: z.string(),
+  guild_id: z.string().nullable(),
+  guild_name: z.string().nullable(),
   channel_id: z.string().nullable(),
   channel_name: z.string().nullable(),
   inviter: z
@@ -27,6 +29,8 @@ function serializeInvite(invite: import("discord.js").Invite) {
   return {
     code: invite.code,
     url: invite.url,
+    guild_id: invite.guild?.id ?? null,
+    guild_name: invite.guild?.name ?? null,
     channel_id: invite.channelId ?? null,
     channel_name: invite.channel?.name ?? null,
     inviter: invite.inviter ? { id: invite.inviter.id, username: invite.inviter.username } : null,
@@ -62,7 +66,7 @@ const tools = [
   defineTool({
     name: "discord_get_invite",
     description:
-      "Look up details for a single invite by its code, including the target server/channel and usage stats. Works for any public invite, not just this server's. Read-only. Returns a JSON object.",
+      "Look up a single invite by its code: target server and channel, inviter, uses, and expiry. Works for any public invite, but usage counters are only populated for servers the bot is in (0 otherwise). Read-only. Returns a JSON object.",
     annotations: { title: "Get invite", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       invite_code: z

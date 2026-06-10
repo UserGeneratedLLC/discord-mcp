@@ -45,8 +45,8 @@ const allToolsets: Record<string, ToolModule> = {
 
 /**
  * Selects which toolsets to expose from `DISCORD_MCP_TOOLSETS` (comma-separated,
- * case-insensitive; `all` or unset exposes everything). Unknown or empty selections
- * throw at startup: a typo must not silently expose the full destructive surface.
+ * case-insensitive). Unset, empty, or `all` exposes everything; unknown names throw
+ * at startup — a typo must not silently expose the full destructive surface.
  */
 export function selectModules(): ToolModule[] {
   const raw = process.env.DISCORD_MCP_TOOLSETS?.trim();
@@ -86,7 +86,7 @@ const registry: Map<string, ToolHandler> = (() => {
 
 /**
  * Returns every tool definition across all modules.
- * Called once when the MCP client requests the tool list.
+ * Called on each tools/list request from the MCP client.
  */
 export function getAllDefinitions(): ToolDefinition[] {
   return modules.flatMap((m) => m.definitions);

@@ -34,16 +34,19 @@ const tools = [
       await guild.channels.fetch();
       const cachedBots = guild.members.cache.filter((m) => m.user.bot).size;
       return structured({
-        name: guild.name, totalMembers: guild.memberCount,
-        humans: guild.memberCount - cachedBots, botsInCache: cachedBots,
+        name: guild.name,
+        totalMembers: guild.memberCount,
+        humans: guild.memberCount - cachedBots,
+        botsInCache: cachedBots,
         channels: {
           total: guild.channels.cache.size,
           text: guild.channels.cache.filter((c) => c.type === ChannelType.GuildText).size,
           voice: guild.channels.cache.filter((c) => c.type === ChannelType.GuildVoice).size,
           categories: guild.channels.cache.filter((c) => c.type === ChannelType.GuildCategory).size,
         },
-        roles: guild.roles.cache.size - 1,
-        boostLevel: guild.premiumTier, boostCount: guild.premiumSubscriptionCount ?? 0,
+        roles: guild.roles.cache.size - 1 /* excludes @everyone */,
+        boostLevel: guild.premiumTier,
+        boostCount: guild.premiumSubscriptionCount ?? 0,
         createdAt: guild.createdAt.toISOString(),
       });
     },

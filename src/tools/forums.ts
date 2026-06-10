@@ -117,7 +117,7 @@ const tools = [
       "Get a forum post's details (title, archived/locked state, applied tags, message count) plus its recent messages, oldest-to-newest. Read-only. Pass the post's thread_id. Returns a JSON object.",
     annotations: { title: "Get forum post", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
-      thread_id: threadId.describe("ID (snowflake) of the forum post (thread)."),
+      thread_id: threadId,
       limit: intIn(1, 100).default(20).describe("How many recent messages to include (1–100). Default 20."),
     }),
     outputSchema: threadSummary.extend({
@@ -193,7 +193,7 @@ const tools = [
   defineTool({
     name: "discord_reply_to_forum",
     description:
-      "Post a follow-up message inside an existing forum post (thread). Requires the Send Messages permission. Use discord_create_forum_post to start a new post instead. Returns the new message ID.",
+      "Post a follow-up message inside an existing forum post (thread). Requires the Send Messages in Threads permission (shown as 'Send Messages in Posts' for forums). Use discord_create_forum_post to start a new post instead. Returns the new message ID.",
     annotations: { title: "Reply to forum post", readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       thread_id: snowflake.describe("ID (snowflake) of the forum post (thread) to reply in."),
@@ -208,7 +208,7 @@ const tools = [
   defineTool({
     name: "discord_delete_forum_post",
     description:
-      "Permanently delete a forum post (thread) and all its messages. IRREVERSIBLE. To merely close it without deleting, use discord_update_forum_post with archived:true. Requires the Manage Threads permission (or thread ownership).",
+      "Permanently delete a forum post (thread) and all its messages. IRREVERSIBLE. To merely close it without deleting, use discord_update_forum_post with archived:true. Requires the Manage Threads permission.",
     annotations: { title: "Delete forum post", readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true },
     schema: z.object({
       thread_id: snowflake.describe("ID (snowflake) of the forum post (thread) to delete."),
@@ -274,7 +274,7 @@ const tools = [
   defineTool({
     name: "discord_update_forum_post",
     description:
-      "Update a forum post's title, archived/locked state, or applied tags. Only provided fields change; passing applied_tags replaces the post's tags. Set archived:true to close a post without deleting it. Requires the Manage Threads permission (or thread ownership).",
+      "Update a forum post's title, archived/locked state, or applied tags. Only provided fields change; passing applied_tags replaces the post's tags. Set archived:true to close a post without deleting it. Requires the Manage Threads permission.",
     annotations: { title: "Update forum post", readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
     schema: z.object({
       thread_id: snowflake.describe("ID (snowflake) of the forum post (thread) to update."),

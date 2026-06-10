@@ -6,7 +6,7 @@
 
 [![npm](https://img.shields.io/npm/v/@pasympa/discord-mcp)](https://www.npmjs.com/package/@pasympa/discord-mcp)
 [![License](https://img.shields.io/github/license/PaSympa/discord-mcp)](LICENSE)
-[![Node](https://img.shields.io/badge/node-%3E%3D18-green)](https://nodejs.org)
+[![Node](https://img.shields.io/badge/node-%3E%3D20-green)](https://nodejs.org)
 [![Discord.js](https://img.shields.io/badge/discord.js-v14-5865F2)](https://discord.js.org)
 [![MCP](https://img.shields.io/badge/MCP-compatible-purple)](https://modelcontextprotocol.io)
 
@@ -23,7 +23,7 @@ Messages, channels, roles, permissions, moderation, forums, webhooks — all thr
 
 - **95+ tools** — messages, channels, roles, permissions, moderation, forums, webhooks, scheduled events, invites, DMs, embeds, and more
 - **Multi-guild** — works across multiple servers, no `GUILD_ID` lock-in
-- **Lightweight** — TypeScript + Node.js, ~25kB package, ~73MB Docker image (vs 400MB+ for Java alternatives)
+- **Lightweight** — TypeScript + Node.js, ~70kB package, ~73MB Docker image (vs 400MB+ for Java alternatives)
 - **Modular** — clean architecture, easy to extend with new tools
 - **Two install methods** — npm or Docker, your choice
 
@@ -177,19 +177,19 @@ The server loads `.env` automatically via `dotenv`.
 
 ### Environment variables
 
-| Variable                  | Default | Description                                                                                                                                                                      |
-| ------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `DISCORD_TOKEN`           | —       | **Required.** Bot token.                                                                                                                                                         |
-| `DISCORD_MESSAGE_CONTENT` | `true`  | Set to `false` to stop requesting the Message Content privileged gateway intent at connect time.                                                                                 |
-| `DISCORD_GUILD_MEMBERS`   | `true`  | Set to `false` to stop requesting the Server Members privileged gateway intent at connect time.                                                                                  |
-| `DISCORD_MCP_TOOLSETS`    | `all`   | Comma-separated list of toolsets to expose, to keep the tool list small. Unset or `all` exposes every tool.                                                                      |
-| `DISCORD_ALLOWED_GUILDS`  | all     | Comma-separated guild IDs the server may act on. When set, tool calls targeting any other guild are rejected — whether addressed by guild ID, channel ID, thread ID, or webhook. |
+| Variable                  | Default | Description                                                                                                                                                                                   |
+| ------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DISCORD_TOKEN`           | —       | **Required.** Bot token.                                                                                                                                                                      |
+| `DISCORD_MESSAGE_CONTENT` | `true`  | Set to `false` to stop requesting the Message Content privileged gateway intent at connect time.                                                                                              |
+| `DISCORD_GUILD_MEMBERS`   | `true`  | Set to `false` to stop requesting the Server Members privileged gateway intent at connect time.                                                                                               |
+| `DISCORD_MCP_TOOLSETS`    | `all`   | Comma-separated list of toolsets to expose, to keep the tool list small. Unset or `all` exposes every tool.                                                                                   |
+| `DISCORD_ALLOWED_GUILDS`  | all     | Comma-separated guild IDs the server may act on. When set, tool calls targeting any other guild are rejected — whether addressed by guild ID, channel ID, thread ID, webhook, or invite code. |
 
-These flags only control which gateway intents the server requests when identifying. Requesting a privileged intent that is **not** enabled in the Developer Portal makes the connection fail at startup (close code `4014`) — set the flag to `false` to connect anyway.
+These flags only control which gateway intents the server requests when identifying. Requesting a privileged intent that is **not** enabled in the Developer Portal makes the connection fail at the first tool call (close code `4014`) — set the flag to `false` to connect anyway.
 
 Data access is governed by the **portal toggles**, not by these flags: this server reads everything over the REST API, which Discord gates on the portal setting alone. So with the portal toggles on, setting these flags to `false` loses nothing. With a portal toggle **off**, the corresponding data is restricted regardless of the flags: message bodies come back empty (`content`, `embeds`, `attachments` — except the bot's own messages, DMs, and messages that mention the bot) and member listing fails — enable the toggle in the portal to restore it.
 
-**Toolsets** (`DISCORD_MCP_TOOLSETS`): `discovery`, `messages`, `channels`, `permissions`, `members`, `roles`, `moderation`, `screening`, `stats`, `forums`, `webhooks`, `scheduled_events`, `invites`, `dm`. Example — read-only navigation only: `DISCORD_MCP_TOOLSETS=discovery,messages,members`. Only the listed toolsets' tools are advertised and callable. Unknown names make the server fail at startup instead of silently exposing everything.
+**Toolsets** (`DISCORD_MCP_TOOLSETS`): `discovery`, `messages`, `channels`, `permissions`, `members`, `roles`, `moderation`, `screening`, `stats`, `forums`, `webhooks`, `scheduled_events`, `invites`, `dm`. Example — read-only navigation only: `DISCORD_MCP_TOOLSETS=discovery,messages,members`. Only the listed toolsets' tools are advertised and callable. Unknown names make the server fail at startup instead of silently exposing everything (an empty value counts as unset and exposes all).
 
 ---
 
@@ -202,11 +202,11 @@ Data access is governed by the **portal toggles**, not by these flags: this serv
    - Server Members Intent
    - Message Content Intent
 
-   > **Important:** if the bot requests a privileged intent that is not enabled here, Discord closes the connection with code `4014` and every tool call fails at startup. Enable both, or disable the ones you don't need via the env flags below.
+   > **Important:** if the bot requests a privileged intent that is not enabled here, Discord closes the connection with code `4014` and every tool call fails. Enable both, or disable the ones you don't need via the env flags below.
 
 5. **OAuth2 > URL Generator**:
    - Scopes: `bot`
-   - Permissions: `Send Messages`, `Read Message History`, `Manage Channels`, `Manage Roles`, `Kick Members`, `Ban Members`, `Moderate Members`, `View Audit Log`, `Manage Messages`, `Manage Threads`, `Add Reactions`, `Manage Guild`, `Manage Webhooks`, `Manage Events`, `Create Instant Invite`
+   - Permissions: `Send Messages`, `Read Message History`, `Manage Channels`, `Manage Roles`, `Kick Members`, `Ban Members`, `Moderate Members`, `View Audit Log`, `Manage Messages`, `Manage Threads`, `Add Reactions`, `Manage Guild`, `Manage Webhooks`, `Manage Events`, `Create Instant Invite`, `Manage Nicknames`, `Pin Messages`, `Embed Links`, `Create Public Threads`
 6. Copy the generated URL and invite the bot to your server
 
 ---
@@ -417,8 +417,10 @@ discord-mcp/
 │   ├── index.ts             ← Entry point (MCP server + transport)
 │   ├── client.ts            ← Discord client + shared helpers
 │   ├── constants.ts         ← Shared constants (limits, defaults)
+│   ├── embeds.ts            ← Shared embed schema + builder
 │   └── tools/
-│       ├── index.ts         ← Tool registry
+│       ├── index.ts         ← Tool registry (toolset gating, dispatch)
+│       ├── define.ts        ← defineTool/defineModule + shared zod fields
 │       ├── types.ts         ← Shared TypeScript interfaces
 │       ├── discovery.ts     ← Guild/channel discovery
 │       ├── messages.ts      ← Message CRUD, reactions, threads, embeds

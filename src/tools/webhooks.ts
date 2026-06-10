@@ -16,7 +16,7 @@ const webhookSummary = z.object({
   creator: z.string().nullable(),
 });
 
-/** Tool definitions for creating, sending via, editing, deleting, and listing webhooks. */
+/** Tool definitions for managing webhooks and webhook-sent messages. */
 const tools = [
   defineTool({
     name: "discord_create_webhook",

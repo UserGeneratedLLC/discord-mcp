@@ -82,11 +82,11 @@ interface RegisteredTool {
  * client-facing `inputSchema` and validates incoming args, so `handle` receives
  * values already typed and checked — no `as` casts, no schema/handler drift.
  * An optional `outputSchema` (a `z.object`) derives the advertised `outputSchema`
- * and checks the handler's `structuredContent` against it on the way out. The check
- * is non-fatal here, but conformance is a spec MUST and SDK clients reject
- * non-conforming results — so a logged drift warning is a release blocker, not noise.
- * A conforming result is normalised (unknown keys dropped) and its text block
- * regenerated so both representations stay identical.
+ * and checks the handler's `structuredContent` against it on the way out: a
+ * conforming result is normalised (unknown keys dropped, text block regenerated to
+ * match); a non-conforming one is rejected — the call returns an `isError` result
+ * and the mismatch is logged, because conformance is a spec MUST and SDK clients
+ * reject non-conforming results anyway.
  */
 export function defineTool<S extends z.ZodType>(tool: {
   name: string;
@@ -135,6 +135,7 @@ export function defineTool<S extends z.ZodType>(tool: {
  * Assembles a list of {@link defineTool} tools into a {@link ToolModule}: their
  * client-facing definitions and a name→handler map the registry merges for O(1)
  * dispatch. Validation runs inside each tool's `run`.
+ * @throws {Error} If two tools in the list share a name.
  */
 export function defineModule(tools: RegisteredTool[]): ToolModule {
   const definitions: ToolDefinition[] = tools.map((t) => ({

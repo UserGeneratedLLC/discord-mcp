@@ -279,14 +279,7 @@ const tools = [
       if (channel_id) options.channel = channel_id;
       if (location) options.entityMetadata = { location };
       if (image) options.image = image;
-      if (status) {
-        const statusVal = STATUS_MAP[status];
-        if (!statusVal)
-          throw new Error(
-            `Invalid status: "${status}". Must be SCHEDULED, ACTIVE, COMPLETED, or CANCELED.`,
-          );
-        options.status = statusVal;
-      }
+      if (status) options.status = STATUS_MAP[status];
 
       const updated = await event.edit(
         options as unknown as GuildScheduledEventEditOptions<

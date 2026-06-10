@@ -32,10 +32,7 @@ function parsePerms(raw: string[] | string | undefined): string[] | undefined {
   return undefined;
 }
 
-/**
- * Validates a role_id argument, fetches the role, and guarantees it exists.
- * @throws {Error} If the id is not a valid snowflake or the role is not found.
- */
+/** Fetches a role by ID, throwing a clear error if it does not exist in the guild. */
 async function fetchRole(guild: Guild, rawId: string): Promise<Role> {
   const role = await guild.roles.fetch(rawId);
   if (!role) throw new Error(`Role ${rawId} not found in this server.`);
@@ -47,7 +44,7 @@ const tools = [
   defineTool({
     name: "discord_list_roles",
     description:
-      "List all roles in a server (excluding @everyone), highest-first, with color, position, member count, and permissions. Read-only. Returns a JSON array. Use discord_get_role_members to see who holds a given role.",
+      "List all roles in a server (excluding @everyone), highest-first, with color, position, member count, and permissions. Read-only. Returns { roles: [...] }. Use discord_get_role_members to see who holds a given role.",
     annotations: { title: "List roles", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,
@@ -240,7 +237,7 @@ const tools = [
   defineTool({
     name: "discord_get_role_members",
     description:
-      "List every member who currently holds a specific role. Returns a JSON array (id, username, nickname). Read-only. Use discord_list_roles to discover role IDs first.",
+      "List members who currently hold a specific role, scanning up to 20,000 members. Returns { members: [...], truncated } — check `truncated` on very large servers. Read-only. Use discord_list_roles to discover role IDs first.",
     annotations: { title: "Get role members", readOnlyHint: true, openWorldHint: true },
     schema: z.object({
       guild_id: guildId,
