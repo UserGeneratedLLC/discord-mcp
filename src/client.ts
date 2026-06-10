@@ -50,7 +50,9 @@ let loginPromise: Promise<void> | null = null;
 discord.on(Events.Error, (err) => console.error("Discord client error:", err.message));
 discord.on(Events.ShardError, (err) => console.error("Discord shard error:", err.message));
 discord.on(Events.Invalidated, () => {
-  console.error("Discord session invalidated — connection is dead; the next tool call will re-login.");
+  console.error(
+    "Discord session invalidated — connection is dead; the next tool call will re-login.",
+  );
   discordReady = false;
   loginPromise = null;
 });
@@ -65,9 +67,7 @@ export async function ensureConnected(): Promise<void> {
   if (discordReady) return;
 
   if (!DISCORD_TOKEN) {
-    throw new Error(
-      "DISCORD_TOKEN is required. Set it in your MCP client config or a .env file."
-    );
+    throw new Error("DISCORD_TOKEN is required. Set it in your MCP client config or a .env file.");
   }
 
   if (!loginPromise) {
@@ -81,9 +81,11 @@ export async function ensureConnected(): Promise<void> {
       const timer = setTimeout(() => {
         discord.off(Events.ClientReady, onReady);
         loginPromise = null;
-        reject(new Error(
-          `Discord did not reach READY within ${LOGIN_TIMEOUT_MS / 1000}s. Check the token and that the Server Members / Message Content privileged intents are enabled in the Developer Portal.`
-        ));
+        reject(
+          new Error(
+            `Discord did not reach READY within ${LOGIN_TIMEOUT_MS / 1000}s. Check the token and that the Server Members / Message Content privileged intents are enabled in the Developer Portal, or disable them via DISCORD_GUILD_MEMBERS=false / DISCORD_MESSAGE_CONTENT=false.`,
+          ),
+        );
       }, LOGIN_TIMEOUT_MS);
       discord.once(Events.ClientReady, onReady);
       discord.login(DISCORD_TOKEN).catch((err) => {
@@ -138,7 +140,8 @@ export async function getGuildChannel(channelId: string): Promise<GuildChannel> 
  */
 export function validateId(value: unknown, label: string): string {
   const id = String(value ?? "");
-  if (!/^\d{17,20}$/.test(id)) throw new Error(`Invalid ${label}: "${id}". Must be a Discord snowflake ID (17-20 digits).`);
+  if (!/^\d{17,20}$/.test(id))
+    throw new Error(`Invalid ${label}: "${id}". Must be a Discord snowflake ID (17-20 digits).`);
   return id;
 }
 
@@ -149,7 +152,7 @@ export function validateId(value: unknown, label: string): string {
  */
 export function serializePermissions(perms: Readonly<PermissionsBitField>): string[] {
   return Object.keys(PermissionsBitField.Flags).filter((flag) =>
-    perms.has(flag as keyof typeof PermissionsBitField.Flags)
+    perms.has(flag as keyof typeof PermissionsBitField.Flags),
   );
 }
 
@@ -161,6 +164,6 @@ export function serializePermissions(perms: Readonly<PermissionsBitField>): stri
  */
 export function deserializePermissions(names: string[]): PermissionsBitField {
   return new PermissionsBitField(
-    names.map((p) => PermissionsBitField.Flags[p as keyof typeof PermissionsBitField.Flags])
+    names.map((p) => PermissionsBitField.Flags[p as keyof typeof PermissionsBitField.Flags]),
   );
 }
