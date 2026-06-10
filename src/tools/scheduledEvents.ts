@@ -250,10 +250,10 @@ const tools = [
       location: z.string().optional().describe("New free-text location for EXTERNAL events."),
       image: httpUrl.optional().describe("New cover image URL."),
       status: z
-        .enum(["SCHEDULED", "ACTIVE", "COMPLETED", "CANCELED"])
+        .enum(["ACTIVE", "COMPLETED", "CANCELED"])
         .optional()
         .describe(
-          "Change event status. Allowed transitions only: SCHEDULED→ACTIVE→COMPLETED, or SCHEDULED→CANCELED.",
+          "Change event status. Allowed transitions only: SCHEDULED→ACTIVE→COMPLETED, or SCHEDULED→CANCELED (no transition back to SCHEDULED exists).",
         ),
     }),
     handle: async ({
@@ -383,7 +383,7 @@ const tools = [
       channel_id: snowflake
         .optional()
         .describe(
-          "Channel (snowflake) the invite points to. Defaults to the server's first text channel if omitted.",
+          "Channel (snowflake) the invite points to. Defaults to the event's own channel; REQUIRED for EXTERNAL events, which have none.",
         ),
       max_age: intIn(0, 604800)
         .default(86400)
@@ -397,6 +397,10 @@ const tools = [
     handle: async ({ guild_id, event_id, channel_id, max_age, max_uses }) => {
       const guild = await discord.guilds.fetch(guild_id);
       const event = await guild.scheduledEvents.fetch(event_id);
+      if (event.entityType === GuildScheduledEventEntityType.External && !channel_id)
+        throw new Error(
+          "channel_id is required for EXTERNAL events (they have no channel of their own).",
+        );
       const url = await event.createInviteURL({
         channel: channel_id,
         maxAge: max_age,

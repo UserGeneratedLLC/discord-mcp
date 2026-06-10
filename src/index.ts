@@ -10,7 +10,9 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
   CallToolRequestSchema,
+  ErrorCode,
   ListToolsRequestSchema,
+  McpError,
 } from "@modelcontextprotocol/sdk/types.js";
 
 import { DiscordAPIError } from "discord.js";
@@ -18,7 +20,7 @@ import { ZodError } from "zod";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { ensureConnected, discord } from "./client.js";
-import { getAllDefinitions, handleTool } from "./tools/index.js";
+import { getAllDefinitions, handleTool, hasTool } from "./tools/index.js";
 
 /** Plain-language hints for the Discord API error codes most likely to surface through these tools. */
 const DISCORD_ERROR_HINTS: Record<number, string> = {
@@ -58,27 +60,30 @@ const version: string = pkg.version;
 
 // ─── MCP Server ────────────────────────────────────────────────────────────────
 
-const server = new Server(
-  { name: "discord-mcp", version },
-  { capabilities: { tools: {} } }
-);
+const server = new Server({ name: "discord-mcp", version }, { capabilities: { tools: {} } });
 
 // ─── Tool Definitions ──────────────────────────────────────────────────────────
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: getAllDefinitions(),
-}));
+server.setRequestHandler(ListToolsRequestSchema, async (req) => {
+  if (req.params?.cursor !== undefined)
+    throw new McpError(ErrorCode.InvalidParams, "Invalid cursor: tools/list is not paginated.");
+  return { tools: getAllDefinitions() };
+});
 
 // ─── Tool Handler ───────────────────────────────────────────────────────────────
 
 server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const { name, arguments: args = {} } = req.params;
+  if (!hasTool(name)) throw new McpError(ErrorCode.InvalidParams, `Unknown tool: ${name}`);
 
   try {
     await ensureConnected();
     return await handleTool(name, args);
   } catch (err: unknown) {
-    return { content: [{ type: "text", text: `❌ Error: ${formatToolError(err)}` }], isError: true };
+    return {
+      content: [{ type: "text", text: `❌ Error: ${formatToolError(err)}` }],
+      isError: true,
+    };
   }
 });
 
@@ -101,4 +106,8 @@ process.on("SIGTERM", shutdown);
 process.on("unhandledRejection", (reason) => console.error("Unhandled rejection:", reason));
 process.on("uncaughtException", (err) => console.error("Uncaught exception:", err));
 
-main().catch((err) => { console.error("Fatal:", err); discord.destroy(); process.exit(1); });
+main().catch((err) => {
+  console.error("Fatal:", err);
+  discord.destroy();
+  process.exit(1);
+});

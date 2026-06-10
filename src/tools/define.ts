@@ -25,9 +25,10 @@ export const intIn = (min: number, max: number) => z.int().min(min).max(max);
 
 /**
  * An http(s)-only URL. Bare `z.url()` accepts any WHATWG scheme (javascript:,
- * ftp:, mailto:…) that Discord rejects for clickable/image links.
+ * ftp:, mailto:…) that Discord rejects for clickable/image links. The protocol
+ * regex is unrepresentable in JSON Schema, so `meta` advertises it as a pattern.
  */
-export const httpUrl = z.url({ protocol: /^https?$/ });
+export const httpUrl = z.url({ protocol: /^https?$/ }).meta({ pattern: "^https?://" });
 
 /**
  * Converts a zod schema into the JSON Schema shape MCP sends over the wire.
@@ -114,6 +115,15 @@ export function defineTool<S extends z.ZodType>(tool: {
             `[${tool.name}] structuredContent does not match outputSchema:`,
             parsed.error.issues,
           );
+          return {
+            content: [
+              {
+                type: "text",
+                text: `❌ Internal error: ${tool.name} produced output that does not match its declared outputSchema. Please report this at https://github.com/PaSympa/discord-mcp/issues.`,
+              },
+            ],
+            isError: true,
+          };
         }
       }
       return result;

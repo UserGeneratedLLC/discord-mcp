@@ -108,6 +108,10 @@ function allowedGuilds(): string[] {
     .filter(Boolean);
 }
 
+export function allowListActive(): boolean {
+  return allowedGuilds().length > 0;
+}
+
 export function isGuildAllowed(guildId: string): boolean {
   const list = allowedGuilds();
   return list.length === 0 || list.includes(guildId);

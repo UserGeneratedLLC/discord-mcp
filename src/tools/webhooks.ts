@@ -1,6 +1,6 @@
 import { WebhookClient } from "discord.js";
 import { z } from "zod";
-import { discord, fetchChannelChecked, assertAllowedGuild } from "../client.js";
+import { discord, fetchChannelChecked, assertAllowedGuild, allowListActive } from "../client.js";
 import { buildEmbed, embedObjectSchema } from "../embeds.js";
 import { defineTool, defineModule, snowflake, guildId, httpUrl, structured } from "./define.js";
 
@@ -86,6 +86,8 @@ const tools = [
     }),
     handle: async ({ webhook_id, webhook_token, content, username, avatar_url, embeds }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
+      if (allowListActive())
+        assertAllowedGuild((await discord.fetchWebhook(webhook_id, webhook_token)).guildId);
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         const sendOptions: Record<string, unknown> = {};
@@ -245,6 +247,8 @@ const tools = [
     }),
     handle: async ({ webhook_id, webhook_token, message_id, content, embeds }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
+      if (allowListActive())
+        assertAllowedGuild((await discord.fetchWebhook(webhook_id, webhook_token)).guildId);
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         const editOptions: Record<string, unknown> = {};
@@ -276,6 +280,8 @@ const tools = [
     }),
     handle: async ({ webhook_id, webhook_token, message_id }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
+      if (allowListActive())
+        assertAllowedGuild((await discord.fetchWebhook(webhook_id, webhook_token)).guildId);
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         await client.deleteMessage(message_id);
@@ -304,6 +310,8 @@ const tools = [
     }),
     handle: async ({ webhook_id, webhook_token, message_id }) => {
       if (!webhook_token) throw new Error("webhook_token is required.");
+      if (allowListActive())
+        assertAllowedGuild((await discord.fetchWebhook(webhook_id, webhook_token)).guildId);
       const client = new WebhookClient({ id: webhook_id, token: webhook_token });
       try {
         const msg = await client.fetchMessage(message_id);
