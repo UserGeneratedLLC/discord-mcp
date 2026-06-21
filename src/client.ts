@@ -3,29 +3,43 @@ import {
   Client,
   Events,
   GatewayIntentBits,
-  TextChannel,
-  ThreadChannel,
   GuildChannel,
   PermissionsBitField,
+  type GuildTextBasedChannel,
 } from "discord.js";
 
+/**
+ * Initializes the Discord.js client with the gateway intents (privileged ones
+ * are opt-out via env) and exposes shared helpers used across all tool modules.
+ */
+
 // ─── Discord Client ────────────────────────────────────────────────────────────
-// Initializes the Discord.js client with the required gateway intents
-// and exposes shared helper functions used across all tool modules.
-// ────────────────────────────────────────────────────────────────────────────────
 
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 
 /** Maximum time to wait for the gateway to reach READY before giving up. */
 const LOGIN_TIMEOUT_MS = 30_000;
 
+/**
+ * Reads a boolean env flag, defaulting to `true`. Set to false/0/no/off to disable.
+ * Used to opt out of the two privileged intents when they are not enabled in the
+ * Discord Developer Portal (otherwise the gateway closes with code 4014 on connect).
+ */
+function envEnabled(name: string): boolean {
+  const value = process.env[name];
+  return value === undefined || !/^(false|0|no|off)$/i.test(value.trim());
+}
+
+const messageContentEnabled = envEnabled("DISCORD_MESSAGE_CONTENT");
+const guildMembersEnabled = envEnabled("DISCORD_GUILD_MEMBERS");
+
 export const discord = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildScheduledEvents,
+    ...(messageContentEnabled ? [GatewayIntentBits.MessageContent] : []),
+    ...(guildMembersEnabled ? [GatewayIntentBits.GuildMembers] : []),
   ],
   rest: { retries: 3, timeout: 15_000 },
 });
@@ -37,7 +51,9 @@ let loginPromise: Promise<void> | null = null;
 discord.on(Events.Error, (err) => console.error("Discord client error:", err.message));
 discord.on(Events.ShardError, (err) => console.error("Discord shard error:", err.message));
 discord.on(Events.Invalidated, () => {
-  console.error("Discord session invalidated — connection is dead; the next tool call will re-login.");
+  console.error(
+    "Discord session invalidated — connection is dead; the next tool call will re-login.",
+  );
   discordReady = false;
   loginPromise = null;
 });
@@ -50,11 +66,15 @@ discord.on(Events.Invalidated, () => {
  */
 export async function ensureConnected(): Promise<void> {
   if (discordReady) return;
+  // A late READY (after the 30s timeout cleared the listener) must not wedge the
+  // server forever: trust the client state, not only our flag.
+  if (discord.isReady()) {
+    discordReady = true;
+    return;
+  }
 
   if (!DISCORD_TOKEN) {
-    throw new Error(
-      "DISCORD_TOKEN is required. Set it in your MCP client config or a .env file."
-    );
+    throw new Error("DISCORD_TOKEN is required. Set it in your MCP client config or a .env file.");
   }
 
   if (!loginPromise) {
@@ -68,9 +88,11 @@ export async function ensureConnected(): Promise<void> {
       const timer = setTimeout(() => {
         discord.off(Events.ClientReady, onReady);
         loginPromise = null;
-        reject(new Error(
-          `Discord did not reach READY within ${LOGIN_TIMEOUT_MS / 1000}s. Check the token and that the Server Members / Message Content privileged intents are enabled in the Developer Portal.`
-        ));
+        reject(
+          new Error(
+            `Discord did not reach READY within ${LOGIN_TIMEOUT_MS / 1000}s. Check the token and that the Server Members / Message Content privileged intents are enabled in the Developer Portal, or disable them via DISCORD_GUILD_MEMBERS=false / DISCORD_MESSAGE_CONTENT=false.`,
+          ),
+        );
       }, LOGIN_TIMEOUT_MS);
       discord.once(Events.ClientReady, onReady);
       discord.login(DISCORD_TOKEN).catch((err) => {
@@ -85,35 +107,95 @@ export async function ensureConnected(): Promise<void> {
   await loginPromise;
 }
 
+/** Reads DISCORD_ALLOWED_GUILDS lazily so module import order cannot freeze an empty list. */
+function allowedGuilds(): string[] {
+  return (process.env.DISCORD_ALLOWED_GUILDS ?? "")
+    .split(",")
+    .map((id) => id.trim())
+    .filter(Boolean);
+}
+
+/** True when DISCORD_ALLOWED_GUILDS contains at least one guild ID. */
+export function allowListActive(): boolean {
+  return allowedGuilds().length > 0;
+}
+
+/** True if the guild is in DISCORD_ALLOWED_GUILDS — or when no allow-list is configured (empty list allows all guilds). */
+export function isGuildAllowed(guildId: string): boolean {
+  const list = allowedGuilds();
+  return list.length === 0 || list.includes(guildId);
+}
+
 /**
- * Fetches a channel by ID and guarantees it is a text-capable guild channel
- * (a TextChannel or any thread inside one — announcement / public / private / forum).
- * Both class hierarchies expose the message-send / edit / fetch surface used by
- * the message tools, so the wrapper accepts either.
- * @param channelId - Discord snowflake ID of the channel.
- * @returns The resolved TextChannel or ThreadChannel instance.
- * @throws {Error} If the channel does not exist or is neither a text channel nor a thread.
+ * Central allow-list gate for resources reached without a guild_id input
+ * (channel/thread/webhook IDs resolve to a guild only after fetching).
  */
-export async function getTextChannel(channelId: string): Promise<TextChannel | ThreadChannel> {
-  const id = validateId(channelId, "channel_id");
-  const channel = await discord.channels.fetch(id);
-  if (!channel || (!(channel instanceof TextChannel) && !(channel instanceof ThreadChannel)))
-    throw new Error(`Channel ${id} is not a text or thread channel or doesn't exist.`);
+export function assertAllowedGuild(guildId: string | null | undefined): void {
+  if (guildId && !isGuildAllowed(guildId))
+    throw new Error(`Guild ${guildId} is not in the DISCORD_ALLOWED_GUILDS allow-list.`);
+}
+
+/** Fetches a channel and enforces the guild allow-list before returning it. */
+export async function fetchChannelChecked(channelId: string) {
+  const channel = await discord.channels.fetch(channelId);
+  if (channel && "guildId" in channel) assertAllowedGuild(channel.guildId);
   return channel;
 }
 
 /**
- * Fetches a channel by ID and guarantees it is a guild channel (text, voice, or category).
+ * Fetches a channel by ID and guarantees it is a guild channel that holds
+ * messages: text, announcement, voice/stage text, or a thread of any kind.
  * @param channelId - Discord snowflake ID of the channel.
- * @returns The resolved GuildChannel instance.
+ * @throws {Error} If the channel does not exist or is not a message-capable guild channel.
+ */
+export async function getTextChannel(channelId: string): Promise<GuildTextBasedChannel> {
+  const id = validateId(channelId, "channel_id");
+  const channel = await fetchChannelChecked(id);
+  if (!channel || channel.isDMBased() || !channel.isTextBased())
+    throw new Error(`Channel ${id} is not a message-capable guild channel or doesn't exist.`);
+  return channel;
+}
+
+/**
+ * Fetches a channel by ID and guarantees it is a non-thread guild channel
+ * (text, voice, category, announcement, stage, forum…).
+ * @param channelId - Discord snowflake ID of the channel.
  * @throws {Error} If the channel does not exist or is not a guild channel.
  */
 export async function getGuildChannel(channelId: string): Promise<GuildChannel> {
   const id = validateId(channelId, "channel_id");
-  const channel = await discord.channels.fetch(id);
+  const channel = await fetchChannelChecked(id);
   if (!channel || !(channel instanceof GuildChannel))
     throw new Error(`Channel ${id} is not a guild channel or doesn't exist.`);
   return channel;
+}
+
+/**
+ * Parses permission flag names from an array or a JSON-encoded array string
+ * (some MCP clients serialize arrays), validating every name against
+ * PermissionsBitField.Flags so unknown flags fail with the culprit named.
+ */
+export function parsePermissionNames(value: string[] | string | undefined): string[] {
+  if (value === undefined) return [];
+  let names: unknown = value;
+  if (typeof value === "string") {
+    try {
+      names = JSON.parse(value);
+    } catch {
+      throw new Error(
+        `Invalid permission list: "${value}" is not a JSON array. Pass an array like ["SendMessages"].`,
+      );
+    }
+  }
+  if (!Array.isArray(names) || !names.every((n) => typeof n === "string"))
+    throw new Error("Invalid permission list: expected an array of permission flag names.");
+  for (const name of names) {
+    if (!(name in PermissionsBitField.Flags))
+      throw new Error(
+        `Unknown permission flag: "${name}". Use Discord PermissionsBitField flag names like "SendMessages".`,
+      );
+  }
+  return names;
 }
 
 /**
@@ -125,37 +207,9 @@ export async function getGuildChannel(channelId: string): Promise<GuildChannel> 
  */
 export function validateId(value: unknown, label: string): string {
   const id = String(value ?? "");
-  if (!/^\d{17,20}$/.test(id)) throw new Error(`Invalid ${label}: "${id}". Must be a Discord snowflake ID (17-20 digits).`);
+  if (!/^\d{17,20}$/.test(id))
+    throw new Error(`Invalid ${label}: "${id}". Must be a Discord snowflake ID (17-20 digits).`);
   return id;
-}
-
-/**
- * Coerces a value to an integer clamped to [min, max], using fallback when it is not a finite number.
- * @param value - The raw value to coerce.
- * @param min - Lower bound (inclusive).
- * @param max - Upper bound (inclusive).
- * @param fallback - Returned when value is missing or non-numeric.
- */
-export function clampInt(value: unknown, min: number, max: number, fallback: number): number {
-  const n = Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  return Math.min(Math.max(Math.trunc(n), min), max);
-}
-
-/**
- * Validates a value is a finite integer within [min, max].
- * @param value - The raw value to validate.
- * @param min - Lower bound (inclusive).
- * @param max - Upper bound (inclusive).
- * @param label - Human-readable label used in the error message.
- * @throws {Error} If the value is not an integer in range.
- */
-export function validateInt(value: unknown, min: number, max: number, label: string): number {
-  const n = Number(value);
-  if (!Number.isInteger(n) || n < min || n > max) {
-    throw new Error(`Invalid ${label}: "${String(value)}". Must be an integer between ${min} and ${max}.`);
-  }
-  return n;
 }
 
 /**
@@ -165,7 +219,7 @@ export function validateInt(value: unknown, min: number, max: number, label: str
  */
 export function serializePermissions(perms: Readonly<PermissionsBitField>): string[] {
   return Object.keys(PermissionsBitField.Flags).filter((flag) =>
-    perms.has(flag as keyof typeof PermissionsBitField.Flags)
+    perms.has(flag as keyof typeof PermissionsBitField.Flags),
   );
 }
 
@@ -177,6 +231,6 @@ export function serializePermissions(perms: Readonly<PermissionsBitField>): stri
  */
 export function deserializePermissions(names: string[]): PermissionsBitField {
   return new PermissionsBitField(
-    names.map((p) => PermissionsBitField.Flags[p as keyof typeof PermissionsBitField.Flags])
+    names.map((p) => PermissionsBitField.Flags[p as keyof typeof PermissionsBitField.Flags]),
   );
 }

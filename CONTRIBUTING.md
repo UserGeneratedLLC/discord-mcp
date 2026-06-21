@@ -5,20 +5,27 @@ Thanks for your interest in contributing to Discord MCP Server!
 ## Adding a New Tool
 
 1. Create a new file in `src/tools/` (e.g. `myfeature.ts`)
-2. Export `definitions` (tool schemas) and `handle()` (tool logic)
-3. Import and add it to the `modules` array in `src/tools/index.ts`
-4. Update `README.md` with the new tool(s)
+2. Build it with `defineTool` entries assembled by `defineModule([...])`, and default-export the result
+3. Add it to `allToolsets` in `src/tools/index.ts` — the key becomes its `DISCORD_MCP_TOOLSETS` name
+4. Update `README.md` (tool tables, counts, toolset list)
 
 ### Tool Module Structure
 
-Every tool module must satisfy the `ToolModule` interface:
-
 ```typescript
-import { discord, validateId } from "../client.js";
-import type { ToolModule, ToolResult } from "./types.js";
+import { z } from "zod";
+import { discord } from "../client.js";
+import {
+  defineTool,
+  defineModule,
+  guildId,
+  snowflake,
+  intIn,
+  httpUrl,
+  structured,
+} from "./define.js";
 
-export const definitions = [
-  {
+const tools = [
+  defineTool({
     name: "discord_my_tool",
     description:
       "One clear action sentence. Then: when to use it vs. similar tools, required Discord permissions, any side effects or destructive/irreversible behavior, and what it returns.",
@@ -29,41 +36,29 @@ export const definitions = [
       idempotentHint: false,
       openWorldHint: true,
     },
-    inputSchema: {
-      type: "object",
-      properties: {
-        guild_id: { type: "string", description: "Discord server (guild) ID (snowflake)." },
-      },
-      required: ["guild_id"],
+    schema: z.object({
+      guild_id: guildId,
+      limit: intIn(1, 100).default(25).describe("How many entries to return (1–100). Default 25."),
+    }),
+    outputSchema: z.object({ items: z.array(z.object({ id: z.string() })) }),
+    handle: async ({ guild_id, limit }) => {
+      const guild = await discord.guilds.fetch(guild_id);
+      // ... tool logic — args arrive validated and typed
+      return structured({ items: [] });
     },
-  },
+  }),
 ];
 
-export async function handle(
-  name: string,
-  args: Record<string, unknown>,
-): Promise<ToolResult | null> {
-  switch (name) {
-    case "discord_my_tool": {
-      const guildId = validateId(args.guild_id, "guild_id");
-      // ... tool logic
-      return { content: [{ type: "text", text: "result" }] };
-    }
-    default:
-      return null;
-  }
-}
-
-export default { definitions, handle } satisfies ToolModule;
+export default defineModule(tools);
 ```
 
 ### Conventions
 
-- Use `validateId()` for all Discord snowflake IDs
-- Return `null` from `handle()` if the tool name doesn't match (routing)
-- Success messages start with `✅`
-- Use `JSON.stringify(data, null, 2)` for list responses
-- Tool names are prefixed with `discord_`
+- The zod `schema` is the single source of truth: it derives the advertised `inputSchema` and validates args before `handle` runs — no manual validation, no `as` casts
+- Reuse the shared fields from `define.ts`: `snowflake`, `guildId` (enforces `DISCORD_ALLOWED_GUILDS`), `intIn(min, max)` for bounded integers, `httpUrl` for http(s)-only URLs; embed inputs come from `embedFieldsShape` in `src/embeds.ts`
+- Resolve channels through `getTextChannel` / `getGuildChannel` / `fetchChannelChecked` from `client.ts` — never `discord.channels.fetch` directly, so the guild allow-list stays enforced centrally
+- Read tools declare an `outputSchema` (object root — wrap arrays as `{ items: [...] }`) and return via `structured(data)`, which emits matching text + `structuredContent`
+- Success messages start with `✅`; tool names are prefixed with `discord_`
 
 ### Tool definition quality
 
@@ -76,9 +71,9 @@ _lowest_-quality tool heavily, so one thin definition drags the whole server's g
   (true for delete/ban/prune/irreversible writes), `idempotentHint` (true if repeating the call
   changes nothing further), and `openWorldHint: true` (every tool calls the Discord API). Add a
   short `title`.
-- **Parameters**: give every `inputSchema` property a `description` with its format and constraints
-  (e.g. snowflake, value range, defaults). When the same schema block repeats across tools, extract
-  it into a shared `const` and spread it (see `EMBED_FIELD_PROPS` in `messages.ts`).
+- **Parameters**: give every schema field a `.describe()` with its format and constraints
+  (e.g. snowflake, value range, defaults). When the same fields repeat across tools, extract
+  them into a shared shape and spread it (see `embedFieldsShape` in `src/embeds.ts`).
 
 ## Development
 

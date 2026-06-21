@@ -13,27 +13,41 @@ export interface ToolAnnotations {
   openWorldHint?: boolean;
 }
 
-/** Schema definition for a single MCP tool, describing its name, purpose, and expected input. */
+/**
+ * Schema definition for a single MCP tool: its name, purpose, and expected input.
+ * `outputSchema` is the JSON Schema (object root) of the tool's `structuredContent`,
+ * present only on tools that return structured output.
+ */
 export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: Record<string, unknown>;
+  outputSchema?: Record<string, unknown>;
   annotations?: ToolAnnotations;
 }
 
-/** Standard response returned by every tool handler. */
+/**
+ * Standard response returned by every tool handler — a subset of the SDK's
+ * `CallToolResult`. Handlers only ever emit text blocks; `structuredContent` is an
+ * optional machine-readable mirror conforming to the tool's `outputSchema` when one
+ * is declared. The index signature mirrors the SDK's passthrough `Result` (which
+ * carries `_meta` and keeps the value assignable to `CallToolResult`).
+ */
 export interface ToolResult {
   [key: string]: unknown;
-  content: { type: string; text: string }[];
+  content: { type: "text"; text: string }[];
+  structuredContent?: Record<string, unknown>;
   isError?: boolean;
 }
 
+/** Validates and executes a single tool call, returning its result. */
+export type ToolHandler = (args: Record<string, unknown>) => Promise<ToolResult>;
+
 /**
- * Contract every tool module must satisfy.
- * - `definitions`: the tools this module exposes to the MCP client.
- * - `handle()`: attempts to execute a tool by name; returns `null` if the name doesn't belong to this module.
+ * Contract every tool module must satisfy: the tool definitions it exposes to the
+ * client, and a name→handler map the registry merges into one O(1) dispatch table.
  */
 export interface ToolModule {
   definitions: ToolDefinition[];
-  handle(name: string, args: Record<string, unknown>): Promise<ToolResult | null>;
+  handlers: ReadonlyMap<string, ToolHandler>;
 }
