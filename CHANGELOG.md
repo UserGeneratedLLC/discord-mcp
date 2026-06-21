@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased — 2.0.0]
+## [2.0.0] - 2026-06-21
 
 ### Breaking
 
@@ -27,6 +27,13 @@
 
 - Message tools (read, delete, pin, search…) now work in announcement channels, which the channel guard previously rejected
 - A Discord READY arriving after the 30s login timeout no longer wedges the server permanently
+
+## [1.7.3] - 2026-06-11
+
+### Fixed
+
+- Security: refreshed the dependency lockfile (8 npm audit findings → 0, including `ws` — the websocket library on the gateway hot path). npm consumers always resolved fresh in-range dependencies and were unaffected; the Docker image embeds the lockfile, so this release rebuilds it with the patched versions
+- Release pipeline: the Docker publish job now requires the npm job (lint, tests, tag↔version guard) instead of publishing unconditionally on any tag
 
 ## [1.7.2] - 2026-06-10
 
