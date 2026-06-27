@@ -1,9 +1,9 @@
 /** Shared constants used across tool modules. */
 
-/** Maximum number of items the Discord API returns per fetch. */
+/** Per-fetch cap for most Discord list endpoints (messages, reactions, events); members/bans use DEFAULTS.MEMBERS_MAX. */
 export const MAX_FETCH_LIMIT = 100;
 
-/** Default fetch limits by context. */
+/** Default and maximum fetch limits by context. */
 export const DEFAULTS = {
   MESSAGES: 20,
   MEMBERS: 50,

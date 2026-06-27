@@ -1,7 +1,8 @@
 {
   "name": "@pasympa/discord-mcp",
-  "version": "1.4.1",
-  "description": "A lightweight, multi-guild Discord MCP server with 90+ tools",
+  "version": "2.0.0",
+  "mcpName": "io.github.PaSympa/discord-mcp",
+  "description": "A lightweight, multi-guild Discord MCP server with 95+ tools",
   "main": "dist/index.js",
   "type": "commonjs",
   "bin": {
@@ -15,6 +16,11 @@
     "start": "node dist/index.js",
     "dev": "tsc && node dist/index.js",
     "prepare": "npm run build",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "node --import tsx --test test/*.test.ts",
+    "version": "node scripts/sync-version.js && git add server.json",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -40,15 +46,22 @@
     "url": "https://github.com/PaSympa/discord-mcp/issues"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "discord.js": "^14.25.1",
-    "dotenv": "^17.3.1"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "discord.js": "^14.26.4",
+    "dotenv": "^17.4.2",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/node": "^25.5.0",
-    "typescript": "^5.9.3"
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^25.9.1",
+    "eslint": "^10.4.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.8.3",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.60.0"
   }
 }

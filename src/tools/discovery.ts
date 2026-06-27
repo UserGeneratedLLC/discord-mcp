@@ -1,82 +1,98 @@
 import { ChannelType, CategoryChannel, GuildChannel } from "discord.js";
-import { discord, validateId } from "../client.js";
-import type { ToolModule, ToolResult } from "./types.js";
+import { z } from "zod";
+import { discord, isGuildAllowed } from "../client.js";
+import { defineTool, defineModule, guildId, structured } from "./define.js";
+
+const guildSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  memberCount: z.number(),
+  icon: z.string().nullable(),
+});
+
+const channelSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  type: z.string(),
+});
 
 /** Tool definitions for server/guild discovery and channel navigation. */
-export const definitions = [
-  {
+const tools = [
+  defineTool({
     name: "discord_list_guilds",
-    description: "List all Discord servers the bot is connected to.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
+    description:
+      "List every Discord server (guild) the bot is a member of (id, name, member count, icon). Takes no arguments. Read-only. Start here to discover the guild_id needed by most other tools.",
+    annotations: { title: "List servers", readOnlyHint: true, openWorldHint: true },
+    schema: z.object({}),
+    outputSchema: z.object({ guilds: z.array(guildSummary) }),
+    handle: async () => {
+      const guilds = discord.guilds.cache
+        .filter((g) => isGuildAllowed(g.id))
+        .map((g) => ({
+          id: g.id,
+          name: g.name,
+          memberCount: g.memberCount,
+          icon: g.iconURL(),
+        }));
+      return structured({ guilds });
+    },
+  }),
+  defineTool({
     name: "discord_get_guild_info",
-    description: "Get detailed info about a guild: name, member count, channels, roles, boosts.",
-    inputSchema: {
-      type: "object",
-      properties: { guild_id: { type: "string" } },
-      required: ["guild_id"],
+    description:
+      "Get details about one server: name, description, member/channel/role counts, boost tier, owner, and creation date. Read-only. Use discord_get_server_stats for a finer breakdown (humans vs bots, channel types).",
+    annotations: { title: "Get server info", readOnlyHint: true, openWorldHint: true },
+    schema: z.object({
+      guild_id: guildId,
+    }),
+    outputSchema: z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string().nullable(),
+      memberCount: z.number(),
+      channelCount: z.number(),
+      roleCount: z.number(),
+      boostLevel: z.number(),
+      boostCount: z.number().nullable(),
+      createdAt: z.string(),
+      owner: z.string(),
+    }),
+    handle: async ({ guild_id }) => {
+      const guild = await discord.guilds.fetch(guild_id);
+      return structured({
+        id: guild.id,
+        name: guild.name,
+        description: guild.description,
+        memberCount: guild.memberCount,
+        channelCount: guild.channels.cache.size,
+        roleCount: guild.roles.cache.size,
+        boostLevel: guild.premiumTier,
+        boostCount: guild.premiumSubscriptionCount,
+        createdAt: guild.createdAt.toISOString(),
+        owner: guild.ownerId,
+      });
     },
-  },
-  {
+  }),
+  defineTool({
     name: "discord_list_channels",
-    description: "List all channels in a guild grouped by category.",
-    inputSchema: {
-      type: "object",
-      properties: { guild_id: { type: "string" } },
-      required: ["guild_id"],
-    },
-  },
-  {
-    name: "discord_find_channel_by_name",
-    description: "Find a channel by name in a guild (partial match supported).",
-    inputSchema: {
-      type: "object",
-      properties: {
-        guild_id: { type: "string" },
-        name: { type: "string" },
-      },
-      required: ["guild_id", "name"],
-    },
-  },
-];
-
-/**
- * Handles discovery tools: listing guilds, fetching guild info,
- * listing channels by category, and searching channels by name.
- */
-export async function handle(name: string, args: Record<string, unknown>): Promise<ToolResult | null> {
-  switch (name) {
-    case "discord_list_guilds": {
-      const guilds = discord.guilds.cache.map((g) => ({
-        id: g.id, name: g.name, memberCount: g.memberCount, icon: g.iconURL(),
-      }));
-      return { content: [{ type: "text", text: JSON.stringify(guilds, null, 2) }] };
-    }
-
-    case "discord_get_guild_info": {
-      const guild = await (await discord.guilds.fetch(validateId(args.guild_id, "guild_id"))).fetch();
-      return {
-        content: [{
-          type: "text", text: JSON.stringify({
-            id: guild.id, name: guild.name, description: guild.description,
-            memberCount: guild.memberCount, channelCount: guild.channels.cache.size,
-            roleCount: guild.roles.cache.size, boostLevel: guild.premiumTier,
-            boostCount: guild.premiumSubscriptionCount, createdAt: guild.createdAt, owner: guild.ownerId,
-          }, null, 2),
-        }],
-      };
-    }
-
-    case "discord_list_channels": {
-      const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
+    description:
+      "List all channels in a server, grouped by their parent category and ordered by position. Returns a JSON object keyed by category name. Read-only. Use discord_find_channel_by_name to locate a specific channel.",
+    annotations: { title: "List channels", readOnlyHint: true, openWorldHint: true },
+    schema: z.object({
+      guild_id: guildId,
+    }),
+    outputSchema: z.object({}).catchall(z.array(channelSummary)),
+    handle: async ({ guild_id }) => {
+      const guild = await discord.guilds.fetch(guild_id);
       await guild.channels.fetch();
       const categories = guild.channels.cache
         .filter((c) => c.type === ChannelType.GuildCategory)
         .sort((a, b) => (a as CategoryChannel).position - (b as CategoryChannel).position);
 
       const result: Record<string, unknown[]> = { "No Category": [] };
-      categories.forEach((cat) => { result[cat.name] = []; });
+      categories.forEach((cat) => {
+        result[cat.name] = [];
+      });
 
       guild.channels.cache
         .filter((c) => c.type !== ChannelType.GuildCategory)
@@ -88,22 +104,29 @@ export async function handle(name: string, args: Record<string, unknown>): Promi
           result[parentName].push(entry);
         });
 
-      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
-    }
-
-    case "discord_find_channel_by_name": {
-      const guild = await discord.guilds.fetch(validateId(args.guild_id, "guild_id"));
+      return structured(result);
+    },
+  }),
+  defineTool({
+    name: "discord_find_channel_by_name",
+    description:
+      "Find channels whose name contains a substring (case-insensitive). Returns matching channels (id, name, type) as a JSON array. Read-only. Useful for resolving a channel_id when you only know the channel's name.",
+    annotations: { title: "Find channel by name", readOnlyHint: true, openWorldHint: true },
+    schema: z.object({
+      guild_id: guildId,
+      name: z.string().describe("Case-insensitive substring to match against channel names."),
+    }),
+    outputSchema: z.object({ matches: z.array(channelSummary) }),
+    handle: async ({ guild_id, name }) => {
+      const guild = await discord.guilds.fetch(guild_id);
       await guild.channels.fetch();
-      const keyword = (args.name as string).toLowerCase();
+      const keyword = name.toLowerCase();
       const matches = guild.channels.cache
         .filter((c) => c.name.toLowerCase().includes(keyword))
         .map((c) => ({ id: c.id, name: c.name, type: ChannelType[c.type] }));
-      return { content: [{ type: "text", text: JSON.stringify(matches, null, 2) }] };
-    }
+      return structured({ matches });
+    },
+  }),
+];
 
-    default:
-      return null;
-  }
-}
-
-export default { definitions, handle } satisfies ToolModule;
+export default defineModule(tools);
